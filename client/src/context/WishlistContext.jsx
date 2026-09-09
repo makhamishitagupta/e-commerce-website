@@ -1,51 +1,92 @@
 import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import { useAuth, useClerk } from '@clerk/clerk-react';
+import { api } from '../services/api.js';
 
 const WishlistContext = createContext(null);
-const STORAGE_KEY = 'luxestyle-wishlist';
-
-const loadInitialState = () => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
 
 function wishlistReducer(state, action) {
   switch (action.type) {
-    case 'TOGGLE': {
-      const exists = state.some((p) => p._id === action.payload._id);
-      return exists
-        ? state.filter((p) => p._id !== action.payload._id)
-        : [...state, action.payload];
-    }
-    case 'REMOVE':
-      return state.filter((p) => p._id !== action.payload.productId);
-    case 'CLEAR':
-      return [];
+    case 'SET':
+      return action.payload;
     default:
       return state;
   }
 }
 
 export const WishlistProvider = ({ children }) => {
-  const [items, dispatch] = useReducer(wishlistReducer, undefined, loadInitialState);
+  const { isLoaded, isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
+  const [items, dispatch] = useReducer(wishlistReducer, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
+    let cancelled = false;
+    if (!isLoaded) return undefined;
+    if (!isSignedIn) {
+      dispatch({ type: 'SET', payload: [] });
+      return undefined;
+    }
+
+    const loadWishlist = async () => {
+      let nextItems = [];
+      try {
+        const response = await api.get('/wishlist');
+        nextItems = response.data.data || [];
+      } catch {}
+
+      const rawIntent = sessionStorage.getItem('luxestyle-pending-wishlist-item');
+      if (rawIntent) {
+        try {
+          const intent = JSON.parse(rawIntent);
+          const response = await api.post(`/wishlist/${intent.productId}`);
+          nextItems = response.data.data || nextItems;
+        } catch {}
+        sessionStorage.removeItem('luxestyle-pending-wishlist-item');
+      }
+
+      if (!cancelled) dispatch({ type: 'SET', payload: nextItems });
+    };
+
+    loadWishlist();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn]);
+
+  const toggleWishlist = async (product) => {
+    if (!isSignedIn) {
+      sessionStorage.setItem(
+        'luxestyle-pending-wishlist-item',
+        JSON.stringify({ productId: product._id })
+      );
+      openSignIn({ redirectUrl: window.location.href });
+      return false;
+    }
+
+    const exists = items.some((item) => item._id === product._id);
+    const response = exists
+      ? await api.delete(`/wishlist/${product._id}`)
+      : await api.post(`/wishlist/${product._id}`);
+    dispatch({ type: 'SET', payload: response.data.data || [] });
+    return true;
+  };
+
+  const removeFromWishlist = async (productId) => {
+    const response = await api.delete(`/wishlist/${productId}`);
+    dispatch({ type: 'SET', payload: response.data.data || [] });
+  };
 
   const value = useMemo(
     () => ({
       items,
-      isWishlisted: (productId) => items.some((p) => p._id === productId),
-      toggleWishlist: (product) => dispatch({ type: 'TOGGLE', payload: product }),
-      removeFromWishlist: (productId) => dispatch({ type: 'REMOVE', payload: { productId } }),
-      clearWishlist: () => dispatch({ type: 'CLEAR' }),
+      isWishlisted: (productId) => items.some((item) => item._id === productId),
+      toggleWishlist,
+      removeFromWishlist,
+      clearWishlist: async () => {
+        await Promise.all(items.map((item) => api.delete(`/wishlist/${item._id}`)));
+        dispatch({ type: 'SET', payload: [] });
+      },
     }),
-    [items]
+    [items, isSignedIn]
   );
 
   return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;

@@ -12,6 +12,7 @@ const ADMIN_LINKS = [
   { label: 'Reviews', to: '/admin/reviews' },
   { label: 'Inventory', to: '/admin/inventory' },
   { label: 'Reports', to: '/admin/reports' },
+  { label: 'Merchants', to: '/merchant' },
 ];
 
 export const AdminLayout = () => (

@@ -8,6 +8,10 @@ import wishlistRoutes from './wishlistRoutes.js';
 import reviewRoutes from './reviewRoutes.js';
 import orderRoutes from './orderRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
+import merchantRoutes from './merchantRoutes.js';
+import agentApiRoutes from './agentApiRoutes.js';
+import paymentRoutes from './paymentRoutes.js';
+import chatRoutes from './chatRoutes.js';
 
 const router = Router();
 
@@ -20,5 +24,9 @@ router.use('/wishlist', wishlistRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/orders', orderRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/merchants', merchantRoutes);
+router.use('/agent/v1', agentApiRoutes);
+router.use('/payment', paymentRoutes);
+router.use('/chat', chatRoutes);
 
 export default router;

@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { api } from '../services/api.js';
 import { useCart } from '../context/CartContext.jsx';
 import { Button } from '../components/ui/Button.jsx';
+import { openRazorpayModal } from '../utils/razorpay.js';
 
 const FIELDS = [
   { name: 'fullName', label: 'Full Name' },
@@ -17,19 +18,53 @@ const FIELDS = [
 ];
 
 export const Checkout = () => {
+  const [searchParams] = useSearchParams();
+  const agentSessionId = searchParams.get('agentSession');
+
   const { activeItems, subtotal, clearCart } = useCart();
   const navigate = useNavigate();
   const [placing, setPlacing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('razorpay');
+
+  // Agent Session State (if initiated by external AI agent)
+  const [agentSession, setAgentSession] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(Boolean(agentSessionId));
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
-  } = useForm({ defaultValues: { country: 'India' } });
+  } = useForm({
+    defaultValues: {
+      fullName: 'Priya Sharma',
+      phone: '+91 99887 76655',
+      line1: 'Flat 402, Signature Towers, Indiranagar',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      postalCode: '560038',
+      country: 'India',
+    },
+  });
 
-  if (activeItems.length === 0) {
+  // If redirected by external AI agent
+  useEffect(() => {
+    if (!agentSessionId) return;
+
+    // Fetch session details or mock session state for authorization
+    api
+      .get(`/agent/v1/cart`)
+      .catch(() => { })
+      .finally(() => setLoadingSession(false));
+  }, [agentSessionId]);
+
+  if (activeItems.length === 0 && !agentSessionId) {
     return (
       <div className="container-page flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
-        <h1 className="text-2xl font-semibold text-ink-900 dark:text-white">Your cart is empty</h1>
+        <h1 className="text-2xl font-semibold text-ink-900 dark:text-white">Your bag is empty</h1>
+        <p className="text-sm text-ink-500">
+          Browse our collections and items you add will appear here.
+        </p>
         <Button as={Link} to="/products">
           Continue shopping
         </Button>
@@ -38,74 +73,239 @@ export const Checkout = () => {
   }
 
   const shippingPrice = subtotal >= 2000 ? 0 : 99;
+  const totalAmount = subtotal + shippingPrice;
 
   const onSubmit = async (shippingAddress) => {
     setPlacing(true);
+    const items = activeItems.map((item) => ({
+      productId: item.product._id,
+      quantity: item.quantity,
+    }));
+
+    if (paymentMethod === 'COD') {
+      try {
+        const res = await api.post('/orders', { items, shippingAddress });
+        clearCart();
+        toast.success('Order placed via Cash on Delivery!');
+        navigate(`/orders/${res.data.data._id}`);
+      } catch (err) {
+        toast.error(err.message || 'Failed to place order');
+      } finally {
+        setPlacing(false);
+      }
+      return;
+    }
+
+    // Razorpay TEST Flow
     try {
-      const items = activeItems.map((item) => ({
-        productId: item.product._id,
-        quantity: item.quantity,
-      }));
-      const res = await api.post('/orders', { items, shippingAddress });
-      clearCart();
-      toast.success('Order placed!');
-      navigate(`/orders/${res.data.data._id}`);
+      const orderRes = await api.post('/payment/create-order', {
+        items,
+        shippingAddress,
+      });
+
+      const { orderId, amount, currency, keyId, isConfigured } = orderRes.data.data;
+
+      await openRazorpayModal({
+        orderId,
+        amount,
+        currency,
+        keyId,
+        allowSimulation: !isConfigured,
+        customer: shippingAddress,
+        onSuccess: async (rzpResponse) => {
+          const verifyToast = toast.loading('Verifying payment signature with backend...');
+          try {
+            const verifyRes = await api.post('/payment/verify', {
+              razorpay_order_id: rzpResponse.razorpay_order_id,
+              razorpay_payment_id: rzpResponse.razorpay_payment_id,
+              razorpay_signature: rzpResponse.razorpay_signature,
+              items,
+              shippingAddress,
+            });
+
+            clearCart();
+            toast.dismiss(verifyToast);
+            toast.success('Payment verified & order created!');
+            navigate(`/orders/${verifyRes.data.data._id}`);
+          } catch (verErr) {
+            toast.dismiss(verifyToast);
+            toast.error(verErr.message || 'Payment verification failed');
+          } finally {
+            setPlacing(false);
+          }
+        },
+        onError: (err) => {
+          setPlacing(false);
+          toast.error(err.message || 'Payment was not completed');
+        },
+      });
     } catch (err) {
-      toast.error(err.message);
-    } finally {
       setPlacing(false);
+      toast.error(err.message || 'Failed to initiate Razorpay checkout');
     }
   };
 
   return (
     <div className="container-page py-10">
-      <h1 className="mb-6 text-2xl font-semibold text-ink-900 dark:text-white">Checkout</h1>
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {FIELDS.map((field) => (
-            <div key={field.name}>
-              <label className="mb-1 block text-sm font-medium text-ink-700 dark:text-ink-300">
-                {field.label}
-              </label>
-              <input
-                {...register(field.name, { required: !field.optional })}
-                className="w-full rounded-lg border border-ink-300 px-3 py-2 text-sm dark:border-ink-700 dark:bg-ink-800"
-              />
-              {errors[field.name] && (
-                <p className="mt-1 text-xs text-red-500">This field is required</p>
-              )}
+      {/* Agent Authorization Notice Banner */}
+      {agentSessionId && (
+        <div className="mb-8 rounded-2xl border border-brand-400 bg-brand-50/80 p-5 dark:border-brand-700 dark:bg-ink-950 shadow-md">
+          <div className="flex items-start gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white font-bold text-sm">
+              AI
+            </span>
+            <div>
+              <h3 className="font-semibold text-base text-ink-900 dark:text-white">
+                Payment Authorization Required
+              </h3>
+              <p className="mt-0.5 text-xs text-ink-600 dark:text-ink-300">
+                An external AI agent initiated this checkout session (<code>{agentSessionId}</code>).
+                In accordance with our agentic security architecture, you must explicitly review and authorize the payment.
+              </p>
             </div>
-          ))}
-          <Button type="submit" loading={placing} className="w-full">
-            Place Order (Cash on Delivery)
-          </Button>
-        </form>
+          </div>
+        </div>
+      )}
 
-        <aside className="h-fit rounded-2xl border border-ink-200 p-6 dark:border-ink-800">
-          <h2 className="font-semibold text-ink-900 dark:text-white">Order Summary</h2>
-          <ul className="mt-4 space-y-2 text-sm">
+      <h1 className="mb-6 text-2xl font-semibold text-ink-900 dark:text-white">Checkout</h1>
+
+      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+        <div>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Delivery Address Section */}
+            <div className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm dark:border-ink-800 dark:bg-ink-950">
+              <h2 className="text-base font-semibold text-ink-900 dark:text-white mb-4">
+                1. Shipping Address
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {FIELDS.map((field) => (
+                  <div
+                    key={field.name}
+                    className={field.name === 'line1' || field.name === 'line2' ? 'sm:col-span-2' : ''}
+                  >
+                    <label className="mb-1 block text-xs font-medium text-ink-700 dark:text-ink-300">
+                      {field.label}
+                    </label>
+                    <input
+                      {...register(field.name, { required: !field.optional })}
+                      className="w-full rounded-xl border border-ink-300 px-3.5 py-2 text-sm dark:border-ink-700 dark:bg-ink-900 dark:text-white focus:border-brand-500 focus:outline-none"
+                    />
+                    {errors[field.name] && (
+                      <p className="mt-1 text-xs text-red-500">This field is required</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Method Section */}
+            <div className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm dark:border-ink-800 dark:bg-ink-950">
+              <h2 className="text-base font-semibold text-ink-900 dark:text-white mb-4">
+                2. Payment Method
+              </h2>
+              <div className="space-y-3">
+                {/* Razorpay Option */}
+                <label
+                  className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${paymentMethod === 'razorpay'
+                      ? 'border-brand-500 bg-brand-50/40 dark:border-brand-500 dark:bg-brand-950/20'
+                      : 'border-ink-200 hover:border-ink-300 dark:border-ink-800'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="razorpay"
+                      checked={paymentMethod === 'razorpay'}
+                      onChange={() => setPaymentMethod('razorpay')}
+                      className="h-4 w-4 text-brand-500"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900 dark:text-white">
+                        Razorpay TEST Gateway
+                      </p>
+                      <p className="text-xs text-ink-500">
+                        Cards, UPI, Netbanking, or Test Simulation with HMAC Verification
+                      </p>
+                    </div>
+                  </div>
+                  <span className="rounded bg-brand-100 px-2 py-0.5 text-[10px] font-bold text-brand-800 dark:bg-brand-900/40 dark:text-brand-300">
+                    RECOMMENDED
+                  </span>
+                </label>
+
+                {/* COD Option */}
+                <label
+                  className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${paymentMethod === 'COD'
+                      ? 'border-brand-500 bg-brand-50/40 dark:border-brand-500 dark:bg-brand-950/20'
+                      : 'border-ink-200 hover:border-ink-300 dark:border-ink-800'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="COD"
+                      checked={paymentMethod === 'COD'}
+                      onChange={() => setPaymentMethod('COD')}
+                      className="h-4 w-4 text-brand-500"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900 dark:text-white">
+                        Cash on Delivery
+                      </p>
+                      <p className="text-xs text-ink-500">Pay when your order arrives</p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <Button type="submit" loading={placing} className="w-full py-3.5 text-sm font-semibold">
+              {paymentMethod === 'razorpay'
+                ? `Authorize & Pay ₹${totalAmount.toFixed(2)} (Razorpay TEST)`
+                : 'Place Order (Cash on Delivery)'}
+            </Button>
+          </form>
+        </div>
+
+        {/* Order Summary Sidebar */}
+        <aside className="h-fit rounded-2xl border border-ink-200 bg-white p-6 shadow-sm dark:border-ink-800 dark:bg-ink-950 space-y-5">
+          <h2 className="font-semibold text-base text-ink-900 dark:text-white">Order Summary</h2>
+
+          <ul className="divide-y divide-ink-100 dark:divide-ink-800 max-h-60 overflow-y-auto pr-1">
             {activeItems.map((item) => (
-              <li key={item.product._id} className="flex justify-between">
-                <span className="text-ink-600 dark:text-ink-300">
-                  {item.product.name} × {item.quantity}
+              <li key={item.product._id} className="flex justify-between py-2.5 text-xs">
+                <span className="text-ink-700 dark:text-ink-300 truncate max-w-[200px]">
+                  {item.product.name} <span className="text-ink-400">× {item.quantity}</span>
                 </span>
-                <span>₹{(item.product.discountPrice || item.product.price) * item.quantity}</span>
+                <span className="font-medium text-ink-900 dark:text-white">
+                  ₹{(item.product.discountPrice || item.product.price) * item.quantity}
+                </span>
               </li>
             ))}
           </ul>
-          <div className="mt-4 space-y-1 border-t border-ink-200 pt-4 text-sm dark:border-ink-800">
-            <div className="flex justify-between">
-              <span className="text-ink-500">Subtotal</span>
+
+          <div className="space-y-2 border-t border-ink-200 pt-4 text-xs dark:border-ink-800">
+            <div className="flex justify-between text-ink-500">
+              <span>Subtotal</span>
               <span>₹{subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-ink-500">Shipping</span>
+            <div className="flex justify-between text-ink-500">
+              <span>Shipping</span>
               <span>{shippingPrice === 0 ? 'Free' : `₹${shippingPrice}`}</span>
             </div>
-            <div className="flex justify-between font-semibold text-ink-900 dark:text-white">
-              <span>Total</span>
-              <span>₹{(subtotal + shippingPrice).toFixed(2)}</span>
+            <div className="flex justify-between font-bold text-sm text-ink-900 dark:text-white pt-2 border-t border-ink-100 dark:border-ink-800">
+              <span>Total Amount</span>
+              <span className="text-brand-600 dark:text-brand-400">₹{totalAmount.toFixed(2)}</span>
             </div>
+          </div>
+
+          <div className="rounded-xl bg-ink-50 p-3 text-[11px] text-ink-500 dark:bg-ink-900 flex items-center gap-2">
+            <svg className="h-4 w-4 text-brand-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span>Razorpay TEST mode with backend HMAC verification</span>
           </div>
         </aside>
       </div>

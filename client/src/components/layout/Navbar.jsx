@@ -4,6 +4,7 @@ import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-reac
 import { useTheme } from '../../context/ThemeContext.jsx';
 import { useCart } from '../../context/CartContext.jsx';
 import { useWishlist } from '../../context/WishlistContext.jsx';
+import { useCurrentUser } from '../../hooks/useCurrentUser.js';
 import { NAV_LINKS, isClerkConfigured } from '../../utils/constants.js';
 import { clsx } from 'clsx';
 
@@ -27,7 +28,18 @@ export const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
   const { itemCount } = useCart();
   const { items: wishlistItems } = useWishlist();
+  const { user } = useCurrentUser();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
+  const isMerchant = user?.role === 'merchant';
+  const canAccessMerchant = isAdmin || isMerchant;
+
+  const navLinks = [
+    ...NAV_LINKS,
+    ...(canAccessMerchant ? [{ label: 'Merchant Portal', to: '/merchant' }] : []),
+    ...(isAdmin ? [{ label: 'Admin', to: '/admin' }] : []),
+  ];
 
   return (
     <header className="glass sticky top-0 z-50 border-b border-ink-200/70 dark:border-ink-700/70">
@@ -46,7 +58,7 @@ export const Navbar = () => {
         </div>
 
         <nav className="hidden items-center gap-8 lg:flex">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
@@ -109,7 +121,7 @@ export const Navbar = () => {
 
       {menuOpen && (
         <nav className="flex flex-col gap-1 border-t border-ink-200 px-4 py-3 lg:hidden dark:border-ink-700">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}

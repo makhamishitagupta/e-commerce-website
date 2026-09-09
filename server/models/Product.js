@@ -31,11 +31,13 @@ const productSchema = new mongoose.Schema(
     trending: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     soldCount: { type: Number, default: 0 },
+    merchant: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant' },
   },
   { timestamps: true }
 );
 
 productSchema.index({ name: 'text', description: 'text' });
+productSchema.index({ merchant: 1, isActive: 1 });
 productSchema.index({ price: 1 });
 productSchema.index({ createdAt: -1 });
 productSchema.index({ soldCount: -1 });

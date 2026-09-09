@@ -3,6 +3,7 @@ import { Navbar } from '../components/layout/Navbar.jsx';
 import { Footer } from '../components/layout/Footer.jsx';
 import { SignInPrompt } from '../components/auth/SignInPrompt.jsx';
 import { isClerkConfigured } from '../utils/constants.js';
+import { AiShoppingAssistant } from '../components/agent/AiShoppingAssistant.jsx';
 
 export const MainLayout = () => {
   const location = useLocation();
@@ -17,6 +18,7 @@ export const MainLayout = () => {
         </div>
       </main>
       <Footer />
+      <AiShoppingAssistant />
     </div>
   );
 };

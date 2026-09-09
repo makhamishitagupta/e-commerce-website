@@ -1,14 +1,17 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
-import { notImplemented } from '../utils/notImplemented.js';
+import { requireAuth, requireCustomer } from '../middleware/auth.js';
+import {
+	getMyCart,
+	addToCart,
+	updateCartItem,
+	removeCartItem,
+} from '../controllers/cartController.js';
 
 const router = Router();
-const stub = notImplemented('cart lands in Phase 3');
-
-router.use(requireAuth);
-router.get('/', stub);
-router.post('/', stub); // add item
-router.put('/:itemId', stub); // update quantity / saved-for-later
-router.delete('/:itemId', stub);
+router.use(requireAuth, requireCustomer);
+router.get('/', getMyCart);
+router.post('/', addToCart);
+router.put('/:itemId', updateCartItem);
+router.delete('/:itemId', removeCartItem);
 
 export default router;

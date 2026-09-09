@@ -14,6 +14,7 @@ import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import apiRoutes from './routes/index.js';
+import { handleRazorpayWebhook } from './controllers/paymentController.js';
 
 const app = express();
 
@@ -34,6 +35,7 @@ if (process.env.NODE_ENV !== 'production') {
 // Clerk webhook needs the raw body for signature verification, so it is
 // mounted BEFORE express.json() and excluded from the global JSON parser.
 app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRoutes);
+app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), handleRazorpayWebhook);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

@@ -32,8 +32,17 @@ const orderSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     items: { type: [orderItemSchema], validate: (v) => v.length > 0 },
     shippingAddress: { type: shippingAddressSchema, required: true },
-    paymentMethod: { type: String, enum: ['COD'], default: 'COD' },
-    paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
+    paymentMethod: { type: String, enum: ['COD', 'razorpay'], default: 'COD' },
+    paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
+    isAgentOrder: { type: Boolean, default: false },
+    agentOrigin: { type: String, default: 'direct_web' },
+    agentKey: { type: mongoose.Schema.Types.ObjectId, ref: 'AgentApiKey' },
+    appliedBundle: { type: mongoose.Schema.Types.ObjectId, ref: 'BundleOffer' },
+    discountAmount: { type: Number, default: 0 },
+    merchant: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant' },
     orderStatus: { type: String, enum: ORDER_STATUSES, default: 'pending' },
     statusHistory: [
       {
@@ -52,6 +61,9 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ orderStatus: 1 });
+orderSchema.index({ merchant: 1, createdAt: -1 });
+orderSchema.index({ isAgentOrder: 1 });
+orderSchema.index({ razorpayOrderId: 1 }, { unique: true, sparse: true });
 
 export const ORDER_STATUS_VALUES = ORDER_STATUSES;
 export default mongoose.model('Order', orderSchema);

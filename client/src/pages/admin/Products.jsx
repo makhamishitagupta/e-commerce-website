@@ -22,6 +22,8 @@ export const AdminProducts = () => {
   const [products, setProducts] = useState(null);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [merchantId, setMerchantId] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -33,6 +35,11 @@ export const AdminProducts = () => {
     load();
     api.get('/categories').then((res) => setCategories(res.data.data));
     api.get('/brands').then((res) => setBrands(res.data.data));
+    api.get('/merchants/all').then((res) => {
+      const availableMerchants = res.data.data || [];
+      setMerchants(availableMerchants);
+      setMerchantId(availableMerchants[0]?._id || '');
+    });
   }, []);
 
   const resetForm = () => {
@@ -79,6 +86,7 @@ export const AdminProducts = () => {
       sizes: form.sizes ? form.sizes.split(',').map((s) => s.trim()).filter(Boolean) : [],
       colors: form.colors ? form.colors.split(',').map((c) => c.trim()).filter(Boolean) : [],
       images: form.imageUrl ? [{ url: form.imageUrl, publicId: form.imageUrl }] : undefined,
+      merchant: merchantId,
     };
     try {
       if (editingId) {
@@ -129,6 +137,19 @@ export const AdminProducts = () => {
           {categories.map((c) => (
             <option key={c._id} value={c._id}>
               {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          required
+          value={merchantId}
+          onChange={(e) => setMerchantId(e.target.value)}
+          className="rounded-lg border border-ink-300 px-3 py-2 text-sm dark:border-ink-700 dark:bg-ink-800"
+        >
+          <option value="">Select merchant</option>
+          {merchants.map((merchant) => (
+            <option key={merchant._id} value={merchant._id}>
+              {merchant.storeName}
             </option>
           ))}
         </select>

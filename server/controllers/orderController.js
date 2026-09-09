@@ -1,5 +1,6 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import Merchant from '../models/Merchant.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -16,6 +17,13 @@ export const createOrder = asyncHandler(async (req, res) => {
     _id: { $in: items.map((i) => i.productId) },
     isActive: true,
   });
+
+  const merchantIds = [...new Set(products.map((product) => product.merchant?.toString()).filter(Boolean))];
+  if (merchantIds.length !== 1 || products.length !== items.length) {
+    throw new ApiError(400, 'All order items must belong to one active merchant');
+  }
+  const merchant = await Merchant.findOne({ _id: merchantIds[0], status: 'active' });
+  if (!merchant) throw new ApiError(400, 'Merchant store is inactive or missing');
 
   const orderItems = items.map(({ productId, quantity }) => {
     const product = products.find((p) => p._id.toString() === productId);
@@ -36,6 +44,7 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   const order = await Order.create({
     user: req.user._id,
+    merchant: merchant._id,
     items: orderItems,
     shippingAddress,
     itemsPrice,
@@ -63,7 +72,11 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 export const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (!order) throw new ApiError(404, 'Order not found');
-  if (order.user._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+  const isOwner = order.user?._id?.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === 'admin';
+  const isStoreMerchant = req.user.role === 'merchant' && order.merchant && req.user.merchantId && order.merchant.toString() === req.user.merchantId.toString();
+
+  if (!isOwner && !isAdmin && !isStoreMerchant) {
     throw new ApiError(403, 'Not authorized to view this order');
   }
   res.json(new ApiResponse(200, order));
@@ -78,6 +91,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
   const order = await Order.findById(req.params.id);
   if (!order) throw new ApiError(404, 'Order not found');
+
+  if (req.user.role === 'merchant' && (!req.user.merchantId || !order.merchant || order.merchant.toString() !== req.user.merchantId.toString())) {
+    throw new ApiError(403, 'You can only update orders for your own store');
+  }
 
   order.orderStatus = status;
   order.statusHistory.push({ status });

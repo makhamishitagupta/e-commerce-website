@@ -65,8 +65,9 @@ export const ProductDetails = () => {
   const wishlisted = isWishlisted(product._id);
 
   const handleAddToCart = () => {
-    addItem(product, quantity);
-    toast.success('Added to cart');
+    addItem(product, quantity)
+      .then(() => toast.success('Added to cart'))
+      .catch((err) => toast.error(err.message || 'Unable to update cart'));
   };
 
   const handleSubmitReview = async (e) => {

@@ -3,6 +3,7 @@ import { MainLayout } from '../layouts/MainLayout.jsx';
 import { AdminLayout } from '../layouts/AdminLayout.jsx';
 import { ProtectedRoute } from './ProtectedRoute.jsx';
 import { AdminRoute } from './AdminRoute.jsx';
+import { MerchantRoute } from './MerchantRoute.jsx';
 
 import { Home } from '../pages/Home.jsx';
 import { Products } from '../pages/Products.jsx';
@@ -25,6 +26,9 @@ import { AdminReviews } from '../pages/admin/Reviews.jsx';
 import { AdminInventory } from '../pages/admin/Inventory.jsx';
 import { AdminReports } from '../pages/admin/Reports.jsx';
 
+import { MerchantOnboarding } from '../pages/merchant/Onboarding.jsx';
+import { MerchantDashboard } from '../pages/merchant/Dashboard.jsx';
+
 export const AppRoutes = () => (
   <Routes>
     <Route element={<MainLayout />}>
@@ -33,9 +37,15 @@ export const AppRoutes = () => (
       <Route path="/products/:slug" element={<ProductDetails />} />
       <Route path="/cart" element={<Cart />} />
       <Route path="/wishlist" element={<Wishlist />} />
-
       <Route element={<ProtectedRoute />}>
         <Route path="/checkout" element={<Checkout />} />
+        <Route path="/merchant/onboard" element={<MerchantOnboarding />} />
+      </Route>
+      <Route element={<MerchantRoute />}>
+        <Route path="/merchant" element={<MerchantDashboard />} />
+      </Route>
+
+      <Route element={<ProtectedRoute />}>
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetails />} />
         <Route path="/profile" element={<Profile />} />

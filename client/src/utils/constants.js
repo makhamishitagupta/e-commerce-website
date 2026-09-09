@@ -8,8 +8,6 @@ export const isClerkConfigured = Boolean(
 export const NAV_LINKS = [
   { label: 'Home', to: '/' },
   { label: 'Shop', to: '/products' },
-  { label: 'New Arrivals', to: '/products?sort=latest' },
-  { label: 'Best Sellers', to: '/products?sort=bestselling' },
 ];
 
 export const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];

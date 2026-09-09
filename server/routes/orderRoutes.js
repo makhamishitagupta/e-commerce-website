@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth, requireCustomer, requireAdmin, requireAdminOrMerchant } from '../middleware/auth.js';
 import {
   createOrder,
   getMyOrders,
@@ -11,10 +11,10 @@ import {
 const router = Router();
 
 router.use(requireAuth);
-router.get('/', getMyOrders); // my orders
+router.get('/', requireCustomer, getMyOrders); // my orders
 router.get('/admin/all', requireAdmin, getAllOrders);
 router.get('/:id', getOrderById); // order details
-router.post('/', createOrder); // place order (COD)
-router.put('/:id/status', requireAdmin, updateOrderStatus);
+router.post('/', requireCustomer, createOrder); // place order (COD)
+router.put('/:id/status', requireAdminOrMerchant, updateOrderStatus);
 
 export default router;

@@ -1,65 +1,353 @@
-# LuxeStyle
+# LuxeStyle — AI-Powered Agentic E-Commerce Platform
 
-Production-grade MERN e-commerce platform — React 19 + Vite + Tailwind client, Node/Express/MongoDB server, Clerk auth, Cloudinary images, Cash-on-Delivery checkout.
+> Full-stack MERN e-commerce platform with autonomous AI agent commerce, Razorpay TEST checkout with cryptographic verification, merchant intelligence dashboard, and an AI shopping concierge.
 
-Built in phases:
-1. **Foundation** — project scaffold, DB models, Clerk auth wiring *(done)*
-2. Product catalog & browsing
-3. Cart, wishlist, checkout, orders
-4. Admin dashboard
-5. Hardening & deployment prep
+---
 
-## Prerequisites
+## 🎯 Feature Overview
 
-- Node.js 18+
-- A [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) cluster
-- A [Clerk](https://dashboard.clerk.com) application
-- A [Cloudinary](https://cloudinary.com/console) account
+| Feature | Status |
+|---|---|
+| Storefront (Catalog, Cart, Wishlist, Search) | ✅ Production |
+| Clerk Authentication & Role Management | ✅ Production |
+| Admin Panel (Products, Orders, Customers, Reports) | ✅ Production |
+| Merchant Onboarding & Store Registration | ✅ Production |
+| AI Transaction Intelligence (Market Basket Analysis) | ✅ Production |
+| Bundle Suggestion & Merchant Approval Workflow | ✅ Production |
+| Agent-Ready Commerce API (`/api/agent/v1`) | ✅ Production |
+| OpenAPI 3.0 Specification & LLM Tool Schemas | ✅ Production |
+| AI Shopping Concierge Chat (Float Drawer) | ✅ Production |
+| Razorpay TEST Checkout with HMAC-SHA256 Verification | ✅ Production |
+| Agentic Checkout Session (Customer Authorization) | ✅ Production |
+| Merchant AI Dashboard (Revenue, Analytics, Agent Stats) | ✅ Production |
+| MongoDB Persistence (all features real — no mocks) | ✅ Production |
 
-## 1. MongoDB Atlas
+---
 
-1. Create a free cluster.
-2. **Database Access** → add a user with a password.
-3. **Network Access** → allow your IP (or `0.0.0.0/0` for local dev).
-4. **Connect → Drivers** → copy the connection string.
-5. Paste it into `server/.env` as `MONGODB_URI` (swap in your password and a database name, e.g. `/luxestyle`).
+## 🚀 Quick Setup
 
-## 2. Clerk
+### Prerequisites
+- Node.js 20+
+- MongoDB (local or Atlas)
 
-1. Create an application at dashboard.clerk.com. Enable **Email** and **Google** as sign-in options.
-2. **API Keys** → copy the **Publishable key** into `client/.env` (`VITE_CLERK_PUBLISHABLE_KEY`) and both `client/.env`/`server/.env` (`CLERK_PUBLISHABLE_KEY`).
-3. Copy the **Secret key** into `server/.env` as `CLERK_SECRET_KEY`.
-4. **Webhooks** → add an endpoint pointing at `https://<your-public-server-url>/api/webhooks/clerk`, subscribed to `user.created`, `user.updated`, `user.deleted`. Copy the **Signing Secret** into `server/.env` as `CLERK_WEBHOOK_SECRET`.
-   - Webhooks require a publicly reachable URL. For local dev without one, user records still sync automatically on first authenticated API call (see `server/middleware/auth.js`) — the webhook just makes sync real-time and covers deletes.
-5. To make a user an admin, manually set their Mongo `User.role` to `"admin"` (e.g. via MongoDB Atlas' data browser) after they've signed in once.
-
-## 3. Cloudinary
-
-1. From the console dashboard, copy **Cloud name**, **API Key**, and **API Secret** into `server/.env`.
-
-## Running locally
+### 1. Clone & Install
 
 ```bash
-# Server
+# Clone repository
+git clone <repository-url>
+cd LuxeStyle-Ecommerce-website
+
+# Install server dependencies
 cd server
-cp .env.example .env   # fill in real values
 npm install
-npm run dev             # http://localhost:5000
 
-# Client (separate terminal)
+# Install client dependencies
+cd ../client
+npm install
+```
+
+### 2. Server Environment
+
+Copy the example and fill in your credentials:
+
+```bash
+cd server
+cp .env.example .env
+```
+
+Edit `server/.env`:
+
+```env
+PORT=5000
+NODE_ENV=development
+CLIENT_URL=http://localhost:5173
+MONGODB_URI=mongodb://localhost:27017/luxestyle
+
+# Clerk Authentication
+CLERK_SECRET_KEY=sk_test_YOUR_KEY_HERE
+CLERK_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE
+CLERK_WEBHOOK_SECRET=whsec_YOUR_WEBHOOK_SECRET
+
+# Cloudinary (for product image uploads)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# === RAZORPAY TEST CONFIGURATION ===
+# Get from: https://dashboard.razorpay.com → Settings → API Keys → Test Mode
+RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_ID
+RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
+# If not set, the system uses a development simulation fallback with full HMAC verification.
+```
+
+### 3. Client Environment
+
+```bash
 cd client
-cp .env.example .env   # fill in real values
-npm install
-npm run dev             # http://localhost:5173
+cp .env.example .env
 ```
 
-Both apps boot even with placeholder `.env` values — you'll see console warnings for whichever services aren't configured yet, and the UI shows a setup notice on auth-gated pages until Clerk is wired up.
+Edit `client/.env`:
 
-## Project structure
-
-```
-client/   React 19 + Vite + Tailwind CSS storefront & admin UI
-server/   Express REST API, MongoDB models, Clerk/Cloudinary integration
+```env
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE
+VITE_API_BASE_URL=http://localhost:5000/api
 ```
 
-See `client/src` and `server/` for the full folder breakdown (components, context, hooks, layouts, pages, routes, services, utils / config, controllers, middleware, models, routes, utils).
+### 4. Seed the Database
+
+```bash
+cd server
+npm run seed
+```
+
+This seeds:
+- 4 categories, 4 brands, **12 luxury products**
+- **1 flagship merchant store** (LuxeStyle Flagship Atelier)
+- **29 historical orders** with multi-item co-purchase baskets for transaction intelligence
+- **2 AI bundle offers** (1 approved, 1 pending)
+- **Agent API key**: `lx_test_agent_key_2026`
+
+### 5. Start Development Servers
+
+```bash
+# Terminal 1: Server
+cd server && npm run dev
+
+# Terminal 2: Client
+cd client && npm run dev
+```
+
+Visit: **http://localhost:5173**
+
+---
+
+## 🤖 AI Agent Integration Guide
+
+### Authentication
+
+All agent endpoints require a merchant-issued API key via `X-Agent-Key` header:
+
+```http
+X-Agent-Key: lx_test_agent_key_2026
+```
+
+### Base URL
+
+```
+http://localhost:5000/api/agent/v1/
+```
+
+### Getting Machine-Readable Specs
+
+```bash
+# OpenAPI 3.0 Specification
+curl http://localhost:5000/api/agent/v1/openapi.json
+
+# Function Calling Tool Definitions (for Gemini / OpenAI / Claude)
+curl http://localhost:5000/api/agent/v1/tools
+```
+
+### Complete Agent Commerce Flow
+
+```bash
+# 1. Search catalog
+curl -H "X-Agent-Key: lx_test_agent_key_2026" \
+  "http://localhost:5000/api/agent/v1/catalog?query=dress&maxPrice=5000"
+
+# 2. Get approved bundle offers
+curl -H "X-Agent-Key: lx_test_agent_key_2026" \
+  "http://localhost:5000/api/agent/v1/offers"
+
+# 3. Check availability
+curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"productId":"PRODUCT_ID","quantity":1}]}' \
+  "http://localhost:5000/api/agent/v1/check-availability"
+
+# 4. Create agent cart
+curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+  "http://localhost:5000/api/agent/v1/cart"
+
+# 5. Add item to cart
+curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+  -H "Content-Type: application/json" \
+  -d '{"productId":"PRODUCT_ID","quantity":1}' \
+  "http://localhost:5000/api/agent/v1/cart/CART_ID/items"
+
+# 6. Apply approved bundle
+curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+  -H "Content-Type: application/json" \
+  -d '{"bundleId":"BUNDLE_ID"}' \
+  "http://localhost:5000/api/agent/v1/cart/CART_ID/apply-bundle"
+
+# 7. Initiate agentic checkout — PAUSES for explicit customer authorization
+curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cartId":"CART_ID",
+    "customerInfo":{"fullName":"Jane Doe","email":"jane@example.com","phone":"+91 99001 22334"},
+    "shippingAddress":{"line1":"12 Elm Street","city":"Mumbai","state":"Maharashtra","postalCode":"400001"}
+  }' \
+  "http://localhost:5000/api/agent/v1/checkout/initiate"
+# Returns: sessionId + authorizationUrl + Razorpay orderId
+
+# 8. Customer authorizes → verify payment (HMAC-SHA256)
+curl -X POST -H "Content-Type: application/json" \
+  -d '{
+    "sessionId":"SESSION_ID",
+    "razorpay_order_id":"order_xxx",
+    "razorpay_payment_id":"pay_xxx",
+    "razorpay_signature":"SIGNATURE"
+  }' \
+  "http://localhost:5000/api/agent/v1/checkout/verify"
+```
+
+---
+
+## 💳 Razorpay TEST Configuration
+
+### Getting Test API Keys
+
+1. Sign up at [dashboard.razorpay.com](https://dashboard.razorpay.com)
+2. Navigate to **Settings → API Keys**
+3. Ensure you are in **Test Mode** (toggle at the top)
+4. Click **"Generate Test Key"**
+5. Copy your `Key ID` (rzp_test_...) and `Key Secret`
+6. Add to `server/.env`:
+
+```env
+RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_ID
+RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
+```
+
+### Test Card Numbers (Razorpay TEST Mode)
+
+| Card | Number | CVV | Expiry |
+|---|---|---|---|
+| Visa (Success) | 4111 1111 1111 1111 | Any 3 digits | Any future date |
+| Mastercard (Success) | 5104 0155 5555 5558 | Any | Any future |
+| UPI (Success) | success@razorpay | — | — |
+
+### Simulation Mode (No API Keys Required)
+
+If Razorpay keys are not configured, the system automatically activates a **browser simulation mode** that:
+- Generates a local Razorpay order ID
+- Shows a browser confirmation dialog simulating the payment popup
+- Performs **real HMAC-SHA256 verification** with the development signature format
+- Creates a real MongoDB order with `paymentStatus: 'paid'`
+
+---
+
+## 🏪 Merchant Portal
+
+### Access
+Navigate to **http://localhost:5173/merchant** or click "Merchant Portal" in the navbar.
+
+Click **"Launch Flagship Store Demo →"** for instant access with pre-seeded historical data.
+
+### Dashboard Tabs
+
+| Tab | Contents |
+|---|---|
+| **Overview & Sales** | Revenue metrics, Agent vs Direct breakdown, recent orders, low stock alerts |
+| **AI Transaction Intelligence** | Run correlation analysis, review AI-suggested bundles, approve/reject, view live bundles |
+| **Agent Commerce Hub & APIs** | API key management, interactive agent sandbox, OpenAPI & Tools JSON viewer |
+| **Products** | Merchant catalog with stock and sales data |
+| **Orders** | Order history with agent/direct source attribution |
+
+### Running AI Transaction Intelligence
+
+1. Go to **Merchant Portal → AI Transaction Intelligence** tab
+2. Click **"Run Intelligence Scan Now"**
+3. The system analyzes all MongoDB orders and computes:
+   - **Support** — how often two items are purchased together
+   - **Confidence** — probability of buying B given purchase of A
+   - **Lift** — statistical significance ratio (>1.0 = positive correlation)
+4. Suggests high-lift combinations as bundle offers
+5. Review each suggestion and click **"✓ Approve & Activate"** to make it live in the agent catalog
+
+---
+
+## 🛍️ AI Shopping Concierge
+
+The **floating AI Concierge button** (bottom-right on all pages) opens a conversational shopping assistant that:
+
+- Searches the luxury product catalog with natural language
+- Returns **interactive product cards** with "Add to Cart" buttons
+- Displays **approved bundle offer cards** with savings percentages
+- Provides a **Razorpay TEST checkout authorization card** for checkout
+- Syncs in real-time with the cart (count badge updates instantly)
+
+**Example queries:**
+- "Show me silk dresses under ₹5000"
+- "Show bundle deals"
+- "Add Oxford Shirt to my bag"
+- "I want to checkout"
+- "Men's clothing"
+
+---
+
+## 🏗️ Backend Architecture
+
+```
+server/
+├── models/
+│   ├── User.js              # Extended with merchant role + merchantId
+│   ├── Product.js           # Extended with merchant reference
+│   ├── Order.js             # Extended with Razorpay, agent, merchant fields
+│   ├── Merchant.js          # Merchant store & settings
+│   ├── AgentApiKey.js       # API key auth for external agents
+│   ├── BundleOffer.js       # AI-suggested & approved bundles
+│   ├── AgentCart.js         # Stateless headless cart for agents
+│   └── AgentCheckoutSession.js  # Agentic checkout auth lifecycle
+├── controllers/
+│   ├── merchantController.js   # Onboarding, dashboard, analysis
+│   ├── agentApiController.js   # Agent-ready commerce API endpoints
+│   ├── paymentController.js    # Razorpay CREATE & VERIFY
+│   └── chatController.js       # AI shopping concierge
+├── services/
+│   ├── transactionIntelligenceService.js  # Market basket analysis
+│   └── aiChatService.js                   # Conversational AI logic
+├── middleware/
+│   └── agentAuth.js         # X-Agent-Key verification & scopes
+├── config/
+│   └── razorpay.js          # Razorpay init + HMAC verification helper
+└── utils/
+    ├── seed.js              # Enhanced seeder with merchant + historical orders
+    └── testCompleteFlow.js  # Automated 13-step E2E verification script
+```
+
+---
+
+## 🔒 Security Architecture
+
+| Layer | Implementation |
+|---|---|
+| User Auth | Clerk JWT validation via `@clerk/express` |
+| Agent Auth | HMAC-SHA256 hashed API keys stored in MongoDB, constant-time comparison |
+| Payment Verification | Razorpay HMAC-SHA256 signature verification with `razorpay_order_id + razorpay_payment_id` |
+| Human Authorization | Agentic checkouts **always** require explicit customer approval — agents cannot auto-pay |
+| Scope Permissions | Agent keys can be restricted to specific scopes (`catalog:read`, `cart:write`, `checkout:write`, `analytics:read`) |
+| Role-Based Access | `admin`, `merchant`, `user` roles, all enforced server-side |
+
+---
+
+## 🔑 Demo API Key (Development)
+
+```
+X-Agent-Key: lx_test_agent_key_2026
+```
+
+Valid for all scopes on the seeded LuxeStyle Flagship merchant store. Reset with `npm run seed`.
+
+---
+
+## 📊 Running the E2E Verification Test
+
+```bash
+cd server
+node utils/testCompleteFlow.js
+```
+
+This validates all 13 steps of the complete flow in a single run.

@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useCallback } from 'react';
 import { useAuth, useClerk } from '@clerk/clerk-react';
 import { api } from '../services/api.js';
+import { useCurrentUser } from '../hooks/useCurrentUser.js';
 
 const WishlistContext = createContext(null);
 
@@ -15,16 +16,18 @@ function wishlistReducer(state, action) {
 
 export const WishlistProvider = ({ children }) => {
   const { isLoaded, isSignedIn } = useAuth();
+  const { user, loading: userLoading } = useCurrentUser();
   const { openSignIn } = useClerk();
   const [items, dispatch] = useReducer(wishlistReducer, []);
 
   useEffect(() => {
     let cancelled = false;
     if (!isLoaded) return undefined;
-    if (!isSignedIn) {
+    if (!isSignedIn || (!userLoading && user?.role !== 'user')) {
       dispatch({ type: 'SET', payload: [] });
       return undefined;
     }
+    if (userLoading || !user) return undefined;
 
     const loadWishlist = async () => {
       let nextItems = [];
@@ -50,9 +53,9 @@ export const WishlistProvider = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, user, userLoading]);
 
-  const toggleWishlist = async (product) => {
+  const toggleWishlist = useCallback(async (product) => {
     if (!isSignedIn) {
       sessionStorage.setItem(
         'luxestyle-pending-wishlist-item',
@@ -61,6 +64,7 @@ export const WishlistProvider = ({ children }) => {
       openSignIn({ redirectUrl: window.location.href });
       return false;
     }
+    if (userLoading || user?.role !== 'user') return false;
 
     const exists = items.some((item) => item._id === product._id);
     const response = exists
@@ -68,12 +72,14 @@ export const WishlistProvider = ({ children }) => {
       : await api.post(`/wishlist/${product._id}`);
     dispatch({ type: 'SET', payload: response.data.data || [] });
     return true;
-  };
+  }, [isSignedIn, items, openSignIn, user, userLoading]);
 
-  const removeFromWishlist = async (productId) => {
+  const removeFromWishlist = useCallback(async (productId) => {
+    if (userLoading || user?.role !== 'user') return false;
     const response = await api.delete(`/wishlist/${productId}`);
     dispatch({ type: 'SET', payload: response.data.data || [] });
-  };
+    return true;
+  }, [user, userLoading]);
 
   const value = useMemo(
     () => ({
@@ -86,7 +92,7 @@ export const WishlistProvider = ({ children }) => {
         dispatch({ type: 'SET', payload: [] });
       },
     }),
-    [items, isSignedIn]
+    [items, toggleWishlist, removeFromWishlist]
   );
 
   return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;

@@ -349,6 +349,10 @@ export const initiateCheckout = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'shippingAddress (line1, city, postalCode) is required');
   }
 
+  if (req.merchant?.settings?.allowAgentCheckout === false) {
+    throw new ApiError(403, 'Agent checkout is disabled for this store');
+  }
+
   const cart = await AgentCart.findOne({ cartId, merchant: req.merchantId, agentKey: req.agent._id });
   if (!cart || cart.items.length === 0) {
     throw new ApiError(400, 'Cart is empty or not found');

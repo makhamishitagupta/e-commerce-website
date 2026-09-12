@@ -736,12 +736,16 @@ export const MerchantDashboard = () => {
                   className="flex items-center justify-between rounded-2xl border border-ink-200 bg-white p-4 transition hover:border-ink-400 dark:border-ink-800 dark:bg-ink-950 dark:hover:border-ink-600"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-ink-100 dark:bg-ink-800">
-                      <img
-                        src={p.images?.[0]?.url || 'https://via.placeholder.com/40'}
-                        alt={p.name}
-                        className="h-full w-full object-cover"
-                      />
+                    <div className="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-ink-100 dark:bg-ink-800 flex items-center justify-center">
+                      {p.images?.[0]?.url ? (
+                        <img
+                          src={p.images[0].url}
+                          alt={p.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-brand-600">LX</span>
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-ink-900 dark:text-white">{p.name}</p>

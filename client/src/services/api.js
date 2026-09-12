@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_BASE_URL, isClerkConfigured } from '../utils/constants.js';
+import { API_BASE_URL } from '../utils/constants.js';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -8,9 +8,9 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const demoRole = !isClerkConfigured ? localStorage.getItem('luxestyle-demo-role') : null;
-    if (demoRole && !config.headers['x-demo-role']) {
-      config.headers['x-demo-role'] = demoRole;
+    const agentKey = localStorage.getItem('luxestyle-agent-key');
+    if (agentKey) {
+      config.headers['x-agent-key'] = agentKey;
     }
   }
   return config;
@@ -26,12 +26,6 @@ export const attachAuthInterceptor = (getToken) => {
     const token = await getToken?.();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-    const demoRole = !isClerkConfigured && typeof window !== 'undefined'
-      ? localStorage.getItem('luxestyle-demo-role')
-      : null;
-    if (demoRole) {
-      config.headers['x-demo-role'] = demoRole;
     }
     const agentKey = typeof window !== 'undefined' ? localStorage.getItem('luxestyle-agent-key') : null;
     if (agentKey) {

@@ -2,7 +2,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-const addressFields = ['label', 'fullName', 'phone', 'line1', 'line2', 'city', 'state', 'postalCode', 'country'];
+const addressFields = ['label', 'fullName', 'phone', 'line1', 'line2', 'city', 'state', 'postalCode', 'country', 'isDefault'];
 
 const pickAddress = (address = {}) =>
   Object.fromEntries(addressFields.filter((field) => address[field] !== undefined).map((field) => [field, address[field]]));
@@ -32,10 +32,14 @@ export const addAddress = asyncHandler(async (req, res) => {
   }
 
   address.country = address.country || 'India';
-  if (address.isDefault || req.user.addresses.length === 0) {
+  const shouldBeDefault = Boolean(address.isDefault || req.user.addresses.length === 0);
+  if (shouldBeDefault) {
     req.user.addresses.forEach((existing) => { existing.isDefault = false; });
     address.isDefault = true;
+  } else {
+    address.isDefault = false;
   }
+
   req.user.addresses.push(address);
   await req.user.save();
   res.status(201).json(new ApiResponse(201, req.user, 'Address added'));
@@ -47,8 +51,19 @@ export const updateAddress = asyncHandler(async (req, res) => {
 
   const update = pickAddress(req.body);
   Object.assign(address, update);
-  if (req.body.isDefault) {
-    req.user.addresses.forEach((existing) => { existing.isDefault = existing._id.equals(address._id); });
+  if (req.body.isDefault !== undefined) {
+    const makeDefault = Boolean(req.body.isDefault);
+    if (makeDefault) {
+      req.user.addresses.forEach((existing) => {
+        existing.isDefault = existing._id.equals(address._id);
+      });
+    } else {
+      address.isDefault = false;
+      // If none is default, fallback to first
+      if (!req.user.addresses.some((a) => a.isDefault) && req.user.addresses.length > 0) {
+        req.user.addresses[0].isDefault = true;
+      }
+    }
   }
   await req.user.save();
   res.json(new ApiResponse(200, req.user, 'Address updated'));

@@ -27,11 +27,21 @@ export const getProducts = asyncHandler(async (req, res) => {
     featured,
     trending,
     merchant,
+    includeInactive,
     sort = 'newest',
   } = req.query;
 
-  const filter = { isActive: true };
-  if (merchant) filter.merchant = merchant;
+  const filter = {};
+  const canViewInactive =
+    includeInactive === 'true' && (req.user?.role === 'admin' || req.user?.role === 'merchant');
+  if (!canViewInactive) filter.isActive = true;
+
+  if (req.user?.role === 'merchant') {
+    const owned = await Merchant.findOne({ owner: req.user._id }).select('_id');
+    if (owned) filter.merchant = owned._id;
+  } else if (merchant) {
+    filter.merchant = merchant;
+  }
   if (category) filter.category = category;
   if (brand) filter.brand = brand;
   if (featured) filter.featured = featured === 'true';
@@ -41,7 +51,15 @@ export const getProducts = asyncHandler(async (req, res) => {
     if (minPrice) filter.price.$gte = Number(minPrice);
     if (maxPrice) filter.price.$lte = Number(maxPrice);
   }
-  if (search) filter.$text = { $search: search };
+  if (search && String(search).trim()) {
+    const term = String(search).trim();
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.$or = [
+      { name: { $regex: escapedTerm, $options: 'i' } },
+      { description: { $regex: escapedTerm, $options: 'i' } },
+      { sku: { $regex: escapedTerm, $options: 'i' } },
+    ];
+  }
 
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.min(100, Math.max(1, Number(limit)));
@@ -71,11 +89,16 @@ export const getProducts = asyncHandler(async (req, res) => {
 
 export const searchProducts = asyncHandler(async (req, res) => {
   const { q = '' } = req.query;
-  if (!q.trim()) return res.json(new ApiResponse(200, []));
+  const term = String(q).trim();
+  if (!term) return res.json(new ApiResponse(200, []));
 
+  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const products = await Product.find({
     isActive: true,
-    name: { $regex: q, $options: 'i' },
+    $or: [
+      { name: { $regex: escapedTerm, $options: 'i' } },
+      { description: { $regex: escapedTerm, $options: 'i' } },
+    ],
   })
     .select('name slug images price discountPrice')
     .limit(8);

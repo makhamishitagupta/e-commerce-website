@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../services/api.js';
 import { useCart } from '../context/CartContext.jsx';
@@ -17,30 +17,32 @@ const Stars = ({ value }) => (
 
 export const ProductDetails = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [buyingNow, setBuyingNow] = useState(false);
 
   const { addItem } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { user, isSignedIn } = useCurrentUser();
 
-  const loadProduct = () => {
+  const loadProduct = useCallback(() => {
     setLoading(true);
     api
       .get(`/products/${slug}`)
       .then((res) => setProduct(res.data.data))
       .catch(() => setProduct(null))
       .finally(() => setLoading(false));
-  };
+  }, [slug]);
 
   useEffect(() => {
     loadProduct();
     setActiveImage(0);
-  }, [slug]);
+  }, [loadProduct]);
 
   if (loading) {
     return (
@@ -63,11 +65,28 @@ export const ProductDetails = () => {
 
   const price = product.discountPrice || product.price;
   const wishlisted = isWishlisted(product._id);
+  const canUseCustomerActions = !isSignedIn || user?.role === 'user';
 
   const handleAddToCart = () => {
     addItem(product, quantity)
-      .then(() => toast.success('Added to cart'))
+      .then((added) => {
+        if (added) toast.success('Added to cart');
+      })
       .catch((err) => toast.error(err.message || 'Unable to update cart'));
+  };
+
+  const handleBuyNow = async () => {
+    setBuyingNow(true);
+    try {
+      const added = await addItem(product, quantity);
+      if (added !== false) {
+        navigate('/checkout');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Unable to proceed to checkout');
+    } finally {
+      setBuyingNow(false);
+    }
   };
 
   const handleSubmitReview = async (e) => {
@@ -161,17 +180,49 @@ export const ProductDetails = () => {
             )}
           </p>
 
-          <div className="mt-6 flex items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              max={product.stock}
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-              className="w-16 rounded-lg border border-ink-300 px-2 py-2 text-center dark:border-ink-700 dark:bg-ink-800"
-            />
-            <Button disabled={!product.inStock} onClick={handleAddToCart} className="flex-1">
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="flex items-center rounded-xl border border-ink-300 bg-ink-50 dark:border-ink-700 dark:bg-ink-900">
+              <button
+                type="button"
+                disabled={quantity <= 1}
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                className="flex h-10 w-9 items-center justify-center rounded-l-xl text-ink-700 hover:bg-ink-200 disabled:opacity-40 dark:text-ink-300 dark:hover:bg-ink-800"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={product.stock}
+                value={quantity}
+                onChange={(e) => setQuantity(Math.min(product.stock, Math.max(1, Number(e.target.value) || 1)))}
+                className="w-12 bg-transparent text-center text-sm font-medium focus:outline-none dark:text-white"
+              />
+              <button
+                type="button"
+                disabled={quantity >= product.stock}
+                onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
+                className="flex h-10 w-9 items-center justify-center rounded-r-xl text-ink-700 hover:bg-ink-200 disabled:opacity-40 dark:text-ink-300 dark:hover:bg-ink-800"
+              >
+                +
+              </button>
+            </div>
+
+            <Button
+              disabled={!product.inStock || !canUseCustomerActions}
+              onClick={handleAddToCart}
+              className="flex-1 min-w-[140px]"
+            >
               Add to Cart
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!product.inStock || !canUseCustomerActions}
+              loading={buyingNow}
+              onClick={handleBuyNow}
+              className="flex-1 min-w-[140px] border-brand-500 text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-950/30"
+            >
+              Buy Now
             </Button>
             <Button variant="outline" onClick={() => toggleWishlist(product)}>
               {wishlisted ? '♥ Saved' : '♡ Save'}

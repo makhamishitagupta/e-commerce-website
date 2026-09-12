@@ -111,12 +111,6 @@ export const onboardMerchant = asyncHandler(async (req, res) => {
   req.user.merchantId = merchant._id;
   await req.user.save();
 
-  // Ensure products are linked to this merchant if none were assigned
-  const unassignedCount = await Product.countDocuments({ merchant: { $exists: false } });
-  if (unassignedCount > 0) {
-    await Product.updateMany({ merchant: { $exists: false } }, { $set: { merchant: merchant._id } });
-  }
-
   // Auto-generate initial Agent API key if none exists
   const existingKey = await AgentApiKey.findOne({ merchant: merchant._id, isActive: true });
   let initialKey = null;
@@ -153,6 +147,58 @@ export const getMerchantProfile = asyncHandler(async (req, res) => {
   }
 
   res.json(new ApiResponse(200, merchant));
+});
+
+export const updateMerchantProfile = asyncHandler(async (req, res) => {
+  const merchant = await resolveMerchantForReq(req);
+  if (!merchant) {
+    throw new ApiError(404, 'No merchant profile found for this account');
+  }
+
+  const { storeName, description, contactEmail, contactPhone, businessCategory, logo, settings, status } = req.body;
+
+  if (storeName !== undefined) {
+    if (!String(storeName).trim()) throw new ApiError(400, 'Store name is required');
+    merchant.storeName = String(storeName).trim();
+  }
+  if (description !== undefined) merchant.description = String(description);
+  if (contactEmail !== undefined) merchant.contactEmail = String(contactEmail).trim().toLowerCase();
+  if (contactPhone !== undefined) merchant.contactPhone = String(contactPhone).trim();
+  if (businessCategory !== undefined) merchant.businessCategory = String(businessCategory);
+  if (logo !== undefined) merchant.logo = String(logo).trim();
+
+  if (status !== undefined) {
+    if (req.user.role !== 'admin') {
+      throw new ApiError(403, 'Only administrators can change store status');
+    }
+    if (!['active', 'pending', 'suspended'].includes(status)) {
+      throw new ApiError(400, 'Invalid store status');
+    }
+    merchant.status = status;
+  }
+
+  if (settings && typeof settings === 'object') {
+    merchant.settings = merchant.settings || {};
+    if (typeof settings.allowAgentCheckout === 'boolean') {
+      merchant.settings.allowAgentCheckout = settings.allowAgentCheckout;
+    }
+    if (settings.maxDiscountPercent !== undefined) {
+      const pct = Number(settings.maxDiscountPercent);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        throw new ApiError(400, 'maxDiscountPercent must be between 0 and 100');
+      }
+      merchant.settings.maxDiscountPercent = pct;
+    }
+    if (typeof settings.autoApproveBundles === 'boolean') {
+      merchant.settings.autoApproveBundles = settings.autoApproveBundles;
+    }
+    if (settings.currency !== undefined) {
+      merchant.settings.currency = String(settings.currency).trim().toUpperCase() || 'INR';
+    }
+  }
+
+  await merchant.save();
+  res.json(new ApiResponse(200, merchant, 'Store settings updated'));
 });
 
 export const getMerchantDashboard = asyncHandler(async (req, res) => {
@@ -249,17 +295,29 @@ export const updateBundleStatus = asyncHandler(async (req, res) => {
   const bundle = await BundleOffer.findById(id);
   if (!bundle) throw new ApiError(404, 'Bundle offer not found');
 
-  // Verify ownership unless user is Admin
-  if (req.user.role !== 'admin') {
-    const merchant = await Merchant.findOne({ owner: req.user._id });
-    if (!merchant || bundle.merchant.toString() !== merchant._id.toString()) {
-      throw new ApiError(403, 'Not authorized to modify this bundle');
-    }
+  const ownerMerchant =
+    req.user.role === 'admin'
+      ? await Merchant.findById(bundle.merchant)
+      : await Merchant.findOne({ owner: req.user._id });
+
+  if (!ownerMerchant || bundle.merchant.toString() !== ownerMerchant._id.toString()) {
+    throw new ApiError(403, 'Not authorized to modify this bundle');
   }
+
+  const maxDiscount = ownerMerchant.settings?.maxDiscountPercent ?? 25;
 
   if (status) bundle.status = status;
   if (status === 'approved') bundle.approvedAt = new Date();
-  if (discountPercentage) bundle.discountPercentage = discountPercentage;
+  if (discountPercentage !== undefined) {
+    const pct = Number(discountPercentage);
+    if (!Number.isFinite(pct) || pct < 0 || pct > maxDiscount) {
+      throw new ApiError(400, `Discount cannot exceed ${maxDiscount}% for this store`);
+    }
+    bundle.discountPercentage = pct;
+    if (!bundlePrice && bundle.originalPrice) {
+      bundle.bundlePrice = Math.round(bundle.originalPrice * (1 - pct / 100));
+    }
+  }
   if (bundlePrice) bundle.bundlePrice = bundlePrice;
 
   await bundle.save();

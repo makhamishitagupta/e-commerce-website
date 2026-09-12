@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { api } from '../services/api.js';
 import { useCart } from '../context/CartContext.jsx';
+import { useCurrentUser } from '../hooks/useCurrentUser.js';
 import { Button } from '../components/ui/Button.jsx';
 import { openRazorpayModal } from '../utils/razorpay.js';
 
@@ -22,41 +23,78 @@ export const Checkout = () => {
   const agentSessionId = searchParams.get('agentSession');
 
   const { activeItems, subtotal, clearCart } = useCart();
+  const { user, loading: userLoading } = useCurrentUser();
   const navigate = useNavigate();
   const [placing, setPlacing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('razorpay');
-
-  // Agent Session State (if initiated by external AI agent)
-  const [agentSession, setAgentSession] = useState(null);
-  const [loadingSession, setLoadingSession] = useState(Boolean(agentSessionId));
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
 
   const {
     register,
     handleSubmit,
-    setValue,
+    reset,
     formState: { errors },
   } = useForm({
     defaultValues: {
-      fullName: 'Priya Sharma',
-      phone: '+91 99887 76655',
-      line1: 'Flat 402, Signature Towers, Indiranagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      postalCode: '560038',
-      country: 'India',
+      fullName: '',
+      phone: '',
+      line1: '',
+      line2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: '',
     },
   });
 
-  // If redirected by external AI agent
   useEffect(() => {
-    if (!agentSessionId) return;
+    if (userLoading) {
+      reset();
+      return;
+    }
 
-    // Fetch session details or mock session state for authorization
-    api
-      .get(`/agent/v1/cart`)
-      .catch(() => { })
-      .finally(() => setLoadingSession(false));
-  }, [agentSessionId]);
+    const defaultAddr = user?.addresses?.find((savedAddress) => savedAddress.isDefault)
+      || user?.addresses?.[0];
+
+    if (defaultAddr) {
+      setSelectedAddressId(defaultAddr._id);
+      reset({
+        fullName: defaultAddr.fullName || '',
+        phone: defaultAddr.phone || '',
+        line1: defaultAddr.line1 || '',
+        line2: defaultAddr.line2 || '',
+        city: defaultAddr.city || '',
+        state: defaultAddr.state || '',
+        postalCode: defaultAddr.postalCode || '',
+        country: defaultAddr.country || 'India',
+      });
+    } else {
+      reset({
+        fullName: user?.name || '',
+        phone: user?.phone || '',
+        line1: '',
+        line2: '',
+        city: '',
+        state: '',
+        postalCode: '',
+        country: 'India',
+      });
+    }
+  }, [reset, user, userLoading]);
+
+  const selectSavedAddress = (addr) => {
+    setSelectedAddressId(addr._id);
+    reset({
+      fullName: addr.fullName || '',
+      phone: addr.phone || '',
+      line1: addr.line1 || '',
+      line2: addr.line2 || '',
+      city: addr.city || '',
+      state: addr.state || '',
+      postalCode: addr.postalCode || '',
+      country: addr.country || 'India',
+    });
+  };
 
   if (activeItems.length === 0 && !agentSessionId) {
     return (
@@ -85,7 +123,7 @@ export const Checkout = () => {
     if (paymentMethod === 'COD') {
       try {
         const res = await api.post('/orders', { items, shippingAddress });
-        clearCart();
+        await clearCart();
         toast.success('Order placed via Cash on Delivery!');
         navigate(`/orders/${res.data.data._id}`);
       } catch (err) {
@@ -103,14 +141,13 @@ export const Checkout = () => {
         shippingAddress,
       });
 
-      const { orderId, amount, currency, keyId, isConfigured } = orderRes.data.data;
+      const { orderId, amount, currency, keyId } = orderRes.data.data;
 
       await openRazorpayModal({
         orderId,
         amount,
         currency,
         keyId,
-        allowSimulation: !isConfigured,
         customer: shippingAddress,
         onSuccess: async (rzpResponse) => {
           const verifyToast = toast.loading('Verifying payment signature with backend...');
@@ -123,7 +160,7 @@ export const Checkout = () => {
               shippingAddress,
             });
 
-            clearCart();
+            await clearCart();
             toast.dismiss(verifyToast);
             toast.success('Payment verified & order created!');
             navigate(`/orders/${verifyRes.data.data._id}`);
@@ -174,9 +211,48 @@ export const Checkout = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Delivery Address Section */}
             <div className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm dark:border-ink-800 dark:bg-ink-950">
-              <h2 className="text-base font-semibold text-ink-900 dark:text-white mb-4">
-                1. Shipping Address
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-ink-900 dark:text-white">
+                  1. Shipping Address
+                </h2>
+                <Link to="/profile" className="text-xs text-brand-600 hover:underline dark:text-brand-400">
+                  Manage Addresses →
+                </Link>
+              </div>
+
+              {/* Saved Address Quick Selector */}
+              {user?.addresses?.length > 0 && (
+                <div className="mb-5 pb-5 border-b border-ink-100 dark:border-ink-800">
+                  <p className="text-xs font-medium text-ink-500 dark:text-ink-400 mb-2.5">
+                    Select a saved address:
+                  </p>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {user.addresses.map((addr) => (
+                      <button
+                        key={addr._id}
+                        type="button"
+                        onClick={() => selectSavedAddress(addr)}
+                        className={`text-left rounded-xl p-3 border transition text-xs ${
+                          selectedAddressId === addr._id
+                            ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/30 font-medium'
+                            : 'border-ink-200 hover:border-ink-300 dark:border-ink-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-ink-900 dark:text-white">{addr.fullName}</span>
+                          {addr.isDefault && (
+                            <span className="text-[10px] bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded px-1.5 py-0.2">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-ink-500 truncate mt-0.5">{addr.line1}, {addr.city}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 {FIELDS.map((field) => (
                   <div
@@ -225,7 +301,7 @@ export const Checkout = () => {
                         Razorpay TEST Gateway
                       </p>
                       <p className="text-xs text-ink-500">
-                        Cards, UPI, Netbanking, or Test Simulation with HMAC Verification
+                        Cards, UPI, Netbanking with cryptographic HMAC verification
                       </p>
                     </div>
                   </div>

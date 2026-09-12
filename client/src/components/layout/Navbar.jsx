@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import { useCart } from '../../context/CartContext.jsx';
 import { useWishlist } from '../../context/WishlistContext.jsx';
 import { useCurrentUser } from '../../hooks/useCurrentUser.js';
 import { NAV_LINKS, isClerkConfigured } from '../../utils/constants.js';
+import { api } from '../../services/api.js';
 import { clsx } from 'clsx';
 
 const IconButton = ({ children, ...props }) => (
@@ -29,7 +30,14 @@ export const Navbar = () => {
   const { itemCount } = useCart();
   const { items: wishlistItems } = useWishlist();
   const { user } = useCurrentUser();
+  const navigate = useNavigate();
+
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchInputRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
   const isMerchant = user?.role === 'merchant';
@@ -40,6 +48,43 @@ export const Navbar = () => {
     ...(canAccessMerchant ? [{ label: 'Merchant Portal', to: '/merchant' }] : []),
     ...(isAdmin ? [{ label: 'Admin', to: '/admin' }] : []),
   ];
+
+  useEffect(() => {
+    if (searchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setSearchLoading(true);
+      api
+        .get(`/products/search?q=${encodeURIComponent(trimmed)}`)
+        .then((res) => {
+          setSuggestions(res.data?.data || []);
+        })
+        .catch(() => setSuggestions([]))
+        .finally(() => setSearchLoading(false));
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSearchSubmit = (e) => {
+    if (e) e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) {
+      navigate(`/products?search=${encodeURIComponent(q)}`);
+      setSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
 
   return (
     <header className="glass sticky top-0 z-50 border-b border-ink-200/70 dark:border-ink-700/70">
@@ -75,7 +120,11 @@ export const Navbar = () => {
         </nav>
 
         <div className="flex items-center gap-1">
-          <IconButton aria-label="Search" title="Search (Phase 2)">
+          <IconButton
+            onClick={() => setSearchOpen((prev) => !prev)}
+            aria-label="Search"
+            title="Search products"
+          >
             <SearchIcon />
           </IconButton>
           <IconButton onClick={toggleTheme} aria-label="Toggle theme">
@@ -118,6 +167,105 @@ export const Navbar = () => {
           )}
         </div>
       </div>
+
+      {/* Interactive Search Overlay & Suggestions */}
+      {searchOpen && (
+        <div className="border-t border-ink-200 bg-white/95 px-4 py-3 backdrop-blur-md dark:border-ink-800 dark:bg-ink-950/95 shadow-lg animate-slide-up">
+          <div className="container-page max-w-3xl">
+            <form onSubmit={handleSearchSubmit} className="relative flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search luxury fashion, shoes, accessories..."
+                  className="w-full rounded-2xl border border-ink-300 bg-ink-50 px-4 py-2.5 pl-11 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:bg-white focus:outline-none dark:border-ink-700 dark:bg-ink-900 dark:text-white dark:focus:bg-ink-900"
+                />
+                <div className="pointer-events-none absolute left-3.5 top-3 text-ink-400">
+                  <SearchIcon />
+                </div>
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-2.5 text-xs text-ink-400 hover:text-ink-600 dark:hover:text-ink-200"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="rounded-2xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-brand-600"
+              >
+                Search
+              </button>
+              <button
+                type="button"
+                onClick={() => setSearchOpen(false)}
+                className="rounded-2xl border border-ink-200 px-4 py-2.5 text-sm font-medium text-ink-600 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-900"
+              >
+                Close
+              </button>
+            </form>
+
+            {/* Live Autocomplete Suggestions */}
+            {searchQuery.trim() && (
+              <div className="mt-3 divide-y divide-ink-100 rounded-2xl border border-ink-200 bg-white p-2 shadow-md dark:divide-ink-800 dark:border-ink-800 dark:bg-ink-900">
+                {searchLoading ? (
+                  <div className="p-4 text-center text-xs text-ink-400">Searching catalog…</div>
+                ) : suggestions.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-ink-500">
+                    No matching products found for &ldquo;{searchQuery}&rdquo;. Press Enter to browse full catalog.
+                  </div>
+                ) : (
+                  <>
+                    <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                      Suggestions
+                    </div>
+                    {suggestions.map((p) => (
+                      <Link
+                        key={p._id}
+                        to={`/products/${p.slug}`}
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className="flex items-center justify-between gap-3 rounded-xl p-2.5 hover:bg-ink-50 dark:hover:bg-ink-800/60 transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={p.images?.[0]?.url}
+                            alt={p.name}
+                            className="h-10 w-8 rounded-md object-cover bg-ink-100 dark:bg-ink-800"
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-ink-900 dark:text-white line-clamp-1">
+                              {p.name}
+                            </p>
+                            <p className="text-xs text-brand-600 dark:text-brand-400 font-semibold">
+                              ₹{(p.discountPrice || p.price).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-ink-400">View →</span>
+                      </Link>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleSearchSubmit}
+                      className="w-full text-center py-2 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                    >
+                      View all results for &ldquo;{searchQuery}&rdquo; →
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {menuOpen && (
         <nav className="flex flex-col gap-1 border-t border-ink-200 px-4 py-3 lg:hidden dark:border-ink-700">

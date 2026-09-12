@@ -44,31 +44,28 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
 
   const { userId } = getAuth(req);
   if (!userId && process.env.NODE_ENV !== 'production') {
-    const demoRole = req.headers['x-demo-role'];
-    if (demoRole === 'admin') {
-      let demoAdmin = await User.findOne({ role: 'admin' });
-      if (!demoAdmin) {
-        demoAdmin = await User.create({
-          clerkId: 'demo_admin_user_2026',
-          name: 'LuxeStyle Administrator',
-          email: 'admin@luxestyle.com',
-          role: 'admin',
-        });
-      }
-      req.user = demoAdmin;
-      return next();
-    }
-    if (demoRole === 'merchant') {
-      const demoMerchant = await User.findOne({ role: 'merchant' });
-      if (demoMerchant) {
-        req.user = demoMerchant;
+    // Development/Test harness: allow testing with a specific real user ID
+    const testUserId = req.headers['x-test-user-id'];
+    if (testUserId) {
+      const testUser = await User.findById(testUserId);
+      if (testUser) {
+        req.user = testUser;
         return next();
       }
     }
-    if (demoRole === 'user' || demoRole === 'customer') {
-      const demoCustomer = await User.findOne({ email: 'priya.sharma@example.com' });
-      if (demoCustomer) {
-        req.user = demoCustomer;
+
+    const demoRole = req.headers['x-demo-role'];
+    if (demoRole === 'admin') {
+      const admin = await User.findOne({ role: 'admin' });
+      if (admin) {
+        req.user = admin;
+        return next();
+      }
+    }
+    if (demoRole === 'merchant') {
+      const merchant = await User.findOne({ role: 'merchant' });
+      if (merchant) {
+        req.user = merchant;
         return next();
       }
     }
@@ -116,7 +113,7 @@ export const requireMerchant = asyncHandler(async (req, res, next) => {
 });
 
 export const requireCustomer = asyncHandler(async (req, res, next) => {
-  if (!req.user || req.user.role !== 'user') {
+  if (!req.user || (req.user.role !== 'user' && req.user.role !== 'merchant')) {
     throw new ApiError(403, 'Customer access required');
   }
   next();

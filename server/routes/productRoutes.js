@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireAdminOrMerchant } from '../middleware/auth.js';
+import { attachUserIfPresent, requireAuth, requireAdminOrMerchant } from '../middleware/auth.js';
 import {
   getProducts,
   searchProducts,
@@ -11,7 +11,7 @@ import {
 
 const router = Router();
 
-router.get('/', getProducts); // list with pagination/filter/sort
+router.get('/', attachUserIfPresent, getProducts); // list with pagination/filter/sort
 router.get('/search', searchProducts); // live search suggestions
 router.get('/:slug', getProductBySlug); // product details
 router.post('/', requireAuth, requireAdminOrMerchant, createProduct);

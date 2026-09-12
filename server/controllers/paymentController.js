@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Merchant from '../models/Merchant.js';
+import { resolveSingleActiveMerchant } from '../utils/resolveMerchantForOrder.js';
 import {
   createRazorpayOrder,
   verifyRazorpaySignature,
@@ -34,12 +35,11 @@ export const createOrderPayment = asyncHandler(async (req, res) => {
     isActive: true,
   });
 
-  const merchantIds = [...new Set(products.map((product) => product.merchant?.toString()).filter(Boolean))];
-  if (merchantIds.length !== 1 || products.length !== items.length) {
-    throw new ApiError(400, 'All order items must belong to one active merchant');
+  if (products.length !== items.length) {
+    throw new ApiError(400, 'One or more items are no longer available');
   }
-  const merchant = await Merchant.findOne({ _id: merchantIds[0], status: 'active' });
-  if (!merchant) throw new ApiError(400, 'Merchant store is inactive or missing');
+
+  const merchant = await resolveSingleActiveMerchant(products);
 
   const orderItems = items.map(({ productId, quantity }) => {
     const product = products.find((p) => p._id.toString() === productId);
@@ -113,12 +113,11 @@ export const verifyPaymentAndCreateOrder = asyncHandler(async (req, res) => {
     isActive: true,
   });
 
-  const merchantIds = [...new Set(products.map((product) => product.merchant?.toString()).filter(Boolean))];
-  if (merchantIds.length !== 1 || products.length !== items.length) {
-    throw new ApiError(400, 'All order items must belong to one active merchant');
+  if (products.length !== items.length) {
+    throw new ApiError(400, 'One or more items are no longer available');
   }
-  const merchant = await Merchant.findOne({ _id: merchantIds[0], status: 'active' });
-  if (!merchant) throw new ApiError(400, 'Merchant store is inactive or missing');
+
+  const merchant = await resolveSingleActiveMerchant(products);
 
   const orderItems = items.map(({ productId, quantity }) => {
     const product = products.find((p) => p._id.toString() === productId);

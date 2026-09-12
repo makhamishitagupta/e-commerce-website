@@ -24,7 +24,6 @@ export const openRazorpayModal = async ({
   currency = 'INR',
   keyId,
   customer = {},
-  allowSimulation = false,
   onSuccess,
   onError,
 }) => {
@@ -76,23 +75,7 @@ export const openRazorpayModal = async ({
     });
     rzp.open();
   } catch (err) {
-    if (!allowSimulation) {
-      if (onError) onError(new Error('Razorpay Checkout could not open. Check the Test Mode key and browser network access.'));
-      return;
-    }
-
-    // Local simulation is allowed only when the backend explicitly reports no Razorpay credentials.
-    console.warn('[razorpay] Modal invocation error, using simulation fallback:', err);
-    if (window.confirm(`[Razorpay TEST Gateway Simulation]\nOrder ID: ${orderId}\nAmount: ₹${(amount / 100).toFixed(2)}\n\nClick OK to simulate successful test payment authorization.`)) {
-      if (onSuccess) {
-        onSuccess({
-          razorpay_order_id: orderId,
-          razorpay_payment_id: `pay_sim_${Date.now()}`,
-          razorpay_signature: `sig_valid_${orderId}`,
-        });
-      }
-    } else {
-      if (onError) onError(new Error('Payment cancelled by user'));
-    }
+    console.error('[razorpay] Modal invocation error:', err);
+    if (onError) onError(new Error(err?.message || 'Razorpay Checkout could not open. Check the Test Mode key and browser network access.'));
   }
 };

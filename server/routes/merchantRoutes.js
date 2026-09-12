@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import {
   onboardMerchant,
   getMerchantProfile,
+  updateMerchantProfile,
   getMerchantDashboard,
   runIntelligenceAnalysis,
   getMerchantBundles,
@@ -21,6 +22,7 @@ router.use(requireAuth);
 router.get('/all', getAllMerchants);
 router.post('/onboard', onboardMerchant);
 router.get('/me', getMerchantProfile);
+router.put('/me', updateMerchantProfile);
 router.get('/dashboard', getMerchantDashboard);
 router.post('/intelligence/analyze', runIntelligenceAnalysis);
 router.get('/bundles', getMerchantBundles);

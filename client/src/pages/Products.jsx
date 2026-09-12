@@ -24,7 +24,14 @@ export const Products = () => {
   const sort = searchParams.get('sort') || 'newest';
   const category = searchParams.get('category') || '';
   const brand = searchParams.get('brand') || '';
+  const search = searchParams.get('search') || searchParams.get('q') || '';
   const page = Number(searchParams.get('page')) || 1;
+
+  const [searchInput, setSearchInput] = useState(search);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
 
   useEffect(() => {
     api.get('/categories').then((res) => setCategories(res.data.data)).catch(() => {});
@@ -36,6 +43,7 @@ export const Products = () => {
     const params = { page, limit: 12, sort };
     if (category) params.category = category;
     if (brand) params.brand = brand;
+    if (search) params.search = search;
 
     api
       .get('/products', { params })
@@ -45,7 +53,7 @@ export const Products = () => {
       })
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
-  }, [sort, category, brand, page]);
+  }, [sort, category, brand, search, page]);
 
   const updateParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
@@ -55,9 +63,62 @@ export const Products = () => {
     setSearchParams(next);
   };
 
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    updateParam('search', searchInput.trim());
+  };
+
   return (
     <div className="container-page py-10">
-      <h1 className="mb-6 text-2xl font-semibold text-ink-900 dark:text-white">Shop</h1>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink-900 dark:text-white">Shop</h1>
+          {search && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-ink-500">Search results for:</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-800 dark:bg-brand-900/40 dark:text-brand-300">
+                &ldquo;{search}&rdquo;
+                <button
+                  onClick={() => updateParam('search', '')}
+                  className="hover:text-red-500 transition"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* In-page search input */}
+        <form onSubmit={handleSearchSubmit} className="flex max-w-sm w-full gap-2">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search within shop..."
+            className="flex-1 rounded-xl border border-ink-300 bg-white px-3.5 py-1.5 text-sm dark:border-ink-700 dark:bg-ink-900 dark:text-white focus:border-brand-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition"
+          >
+            Filter
+          </button>
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput('');
+                updateParam('search', '');
+              }}
+              className="rounded-xl border border-ink-200 px-3 py-1.5 text-xs text-ink-600 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-300"
+            >
+              Reset
+            </button>
+          )}
+        </form>
+      </div>
 
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
         <aside className="space-y-6">

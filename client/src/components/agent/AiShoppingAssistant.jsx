@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../../services/api.js';
 import { useCart } from '../../context/CartContext.jsx';
+import { useCurrentUser } from '../../hooks/useCurrentUser.js';
 import { openRazorpayModal } from '../../utils/razorpay.js';
 
 export const AiShoppingAssistant = () => {
@@ -18,7 +19,8 @@ export const AiShoppingAssistant = () => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const { activeItems, subtotal, addItem, isAuthenticated } = useCart();
+  const { activeItems, addItem, isAuthenticated, subtotal } = useCart();
+  const { user } = useCurrentUser();
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
 
@@ -63,7 +65,7 @@ export const AiShoppingAssistant = () => {
         const added = await addItem(data.action.product, data.action.quantity || 1);
         if (added) toast.success(`Added ${data.action.product.name} to bag!`);
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -95,15 +97,12 @@ export const AiShoppingAssistant = () => {
       return;
     }
 
-    const defaultAddress = {
-      fullName: 'Priya Sharma',
-      phone: '+91 99887 76655',
-      line1: 'Flat 402, Signature Towers, Indiranagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      postalCode: '560038',
-      country: 'India',
-    };
+    const defaultAddress = user?.addresses?.find((a) => a.isDefault) || user?.addresses?.[0];
+    if (!defaultAddress) {
+      toast('Please enter your shipping address at checkout to complete your order.', { icon: '📦' });
+      navigate('/checkout');
+      return;
+    }
 
     const loadToast = toast.loading('Initiating checkout…');
     try {
@@ -242,12 +241,16 @@ export const AiShoppingAssistant = () => {
                         key={p._id}
                         className="flex items-center gap-3 rounded-2xl border border-ink-200 p-2.5 transition hover:border-ink-400 dark:border-ink-800 dark:hover:border-ink-600"
                       >
-                        <div className="h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-ink-100 dark:bg-ink-800">
-                          <img
-                            src={p.images?.[0]?.url || 'https://via.placeholder.com/60'}
-                            alt={p.name}
-                            className="h-full w-full object-cover"
-                          />
+                        <div className="h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-ink-100 dark:bg-ink-800 flex items-center justify-center">
+                          {p.images?.[0]?.url ? (
+                            <img
+                              src={p.images[0].url}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-semibold text-brand-600">LX</span>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-medium text-ink-900 dark:text-white">

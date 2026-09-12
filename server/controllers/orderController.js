@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Merchant from '../models/Merchant.js';
+import { resolveSingleActiveMerchant } from '../utils/resolveMerchantForOrder.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -18,12 +19,11 @@ export const createOrder = asyncHandler(async (req, res) => {
     isActive: true,
   });
 
-  const merchantIds = [...new Set(products.map((product) => product.merchant?.toString()).filter(Boolean))];
-  if (merchantIds.length !== 1 || products.length !== items.length) {
-    throw new ApiError(400, 'All order items must belong to one active merchant');
+  if (products.length !== items.length) {
+    throw new ApiError(400, 'One or more items are no longer available');
   }
-  const merchant = await Merchant.findOne({ _id: merchantIds[0], status: 'active' });
-  if (!merchant) throw new ApiError(400, 'Merchant store is inactive or missing');
+
+  const merchant = await resolveSingleActiveMerchant(products);
 
   const orderItems = items.map(({ productId, quantity }) => {
     const product = products.find((p) => p._id.toString() === productId);
@@ -61,6 +61,8 @@ export const createOrder = asyncHandler(async (req, res) => {
     )
   );
 
+  await Merchant.findByIdAndUpdate(merchant._id, { $inc: { 'metrics.totalOrders': 1 } });
+
   res.status(201).json(new ApiResponse(201, order, 'Order placed'));
 });
 
@@ -96,13 +98,30 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'You can only update orders for your own store');
   }
 
+  const previousStatus = order.orderStatus;
+  const wasPaid = order.paymentStatus === 'paid';
+
   order.orderStatus = status;
   order.statusHistory.push({ status });
   if (status === 'delivered') {
     order.deliveredAt = new Date();
     order.paymentStatus = 'paid';
+    if (!wasPaid && order.merchant) {
+      await Merchant.findByIdAndUpdate(order.merchant, {
+        $inc: { 'metrics.totalRevenue': order.totalAmount },
+      });
+    }
   }
-  if (status === 'cancelled') order.cancelledAt = new Date();
+  if (status === 'cancelled' && previousStatus !== 'cancelled') {
+    order.cancelledAt = new Date();
+    await Promise.all(
+      order.items.map((i) =>
+        Product.findByIdAndUpdate(i.product, {
+          $inc: { stock: i.quantity, soldCount: -i.quantity },
+        })
+      )
+    );
+  }
 
   await order.save();
   res.json(new ApiResponse(200, order, 'Order status updated'));

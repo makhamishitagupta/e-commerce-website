@@ -7,7 +7,7 @@ export const resolveSingleActiveMerchant = async (products) => {
     throw new ApiError(400, 'Could not resolve an active merchant for this order');
   }
   if (merchantIds.length > 1) {
-    throw new ApiError(400, 'Checkout can only include items from one boutique. Remove other items first.');
+    throw new ApiError(400, 'Mixed-boutique checkout must be split into one order per boutique.');
   }
   const merchant = await Merchant.findOne({ _id: merchantIds[0], status: 'active' });
   if (!merchant) throw new ApiError(400, 'Could not resolve an active merchant for this order');

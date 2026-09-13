@@ -9,7 +9,7 @@ import AgentApiKey from '../models/AgentApiKey.js';
 import Order from '../models/Order.js';
 import BundleOffer from '../models/BundleOffer.js';
 import { slugify } from './slugify.js';
-import { hashApiKey } from '../middleware/agentAuth.js';
+import { generateApiKey } from '../middleware/agentAuth.js';
 
 const img = (seed, w = 800, h = 1000) => ({
   url: `https://picsum.photos/seed/${seed}/${w}/${h}`,
@@ -256,12 +256,12 @@ const run = async () => {
   const productByName = Object.fromEntries(insertedProducts.map((p) => [p.name, p]));
 
   // 4. Seed Seed-Key for External AI Agents
-  const testRawKey = 'lx_test_agent_key_2026';
+  const { rawKey, keyPrefix, keyHash } = generateApiKey();
   await AgentApiKey.create({
     merchant: flagshipMerchant._id,
     name: 'Primary AI Assistant Key',
-    keyPrefix: testRawKey.slice(0, 10),
-    keyHash: hashApiKey(testRawKey),
+    keyPrefix,
+    keyHash,
     permissions: ['catalog:read', 'cart:write', 'checkout:write', 'analytics:read'],
     createdByUser: merchantUser._id,
   });

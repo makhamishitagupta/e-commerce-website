@@ -1,26 +1,73 @@
 import Product from '../models/Product.js';
 import BundleOffer from '../models/BundleOffer.js';
+import {
+  extractShoppingIntent,
+  searchCatalog,
+  normalizeText,
+} from './aiShoppingEngine.js';
 
 /**
  * Intelligent shopping assistant orchestration
- * Understands customer intent, executes catalog searches, suggests approved bundles,
- * and prepares cart / checkout action cards.
+ * Understands customer intent, executes catalog searches with strict relevance,
+ * suggests approved bundles, and prepares cart / checkout action cards.
  */
-export const processChatMessage = async ({ message, conversationHistory = [], cartItems = [] }) => {
-  const query = (message || '').trim().toLowerCase();
+export const processChatMessage = async ({
+  message,
+  conversationHistory = [],
+  cartItems = [],
+  merchantId = null,
+}) => {
+  const query = (message || '').trim();
+  const normalized = normalizeText(query);
 
-  // 1. Checkout intent
-  if (
-    query.includes('checkout') ||
-    query.includes('pay now') ||
-    query.includes('buy now') ||
-    query.includes('place order')
-  ) {
+  // 1. Extract previous shopping context from history if available
+  let previousContext = null;
+  if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+    for (let i = conversationHistory.length - 1; i >= 0; i--) {
+      const entry = conversationHistory[i];
+      if (entry.context && typeof entry.context === 'object') {
+        previousContext = entry.context;
+        break;
+      }
+    }
+  }
+
+  // 2. Extract NLP intent
+  const intent = extractShoppingIntent(query, previousContext);
+
+  // 3. Handle Greetings
+  if (intent.isGreeting) {
+    const featured = await Product.find({ isActive: true, featured: true })
+      .limit(3)
+      .select('name price discountPrice images slug');
+
+    return {
+      message: "Hello! Welcome to LuxeStyle. I'm your AI Shopping Concierge. I can help you discover luxury apparel, curated combos, check sizes, or guide you through seamless agentic checkout. What are you looking for today?",
+      type: 'products',
+      products: featured,
+      context: null,
+      suggestions: [
+        "Men's Oxford Shirts",
+        "Women's Silk Dresses",
+        'Designer Footwear',
+        'Curated Bundles',
+      ],
+    };
+  }
+
+  // 4. Handle Checkout intent
+  if (intent.isCheckoutAction) {
     if (!cartItems || cartItems.length === 0) {
       return {
         message: "Your bag is currently empty. Would you like me to recommend some of our trending pieces or curated bundle offers first?",
         type: 'text',
-        suggestions: ['Show trending items', 'View luxury bundles', 'Men’s clothing', 'Women’s dresses'],
+        context: null,
+        suggestions: [
+          'Show trending items',
+          'View luxury bundles',
+          "Men's clothing",
+          "Women's dresses",
+        ],
       };
     }
 
@@ -40,20 +87,24 @@ export const processChatMessage = async ({ message, conversationHistory = [], ca
         shipping,
         total,
       },
+      context: null,
       suggestions: ['Add more items', 'Change delivery details'],
     };
   }
 
-  // 2. Bundles & Offers intent
+  // 5. Handle Bundles & Offers intent
   if (
-    query.includes('bundle') ||
-    query.includes('combo') ||
-    query.includes('offer') ||
-    query.includes('discount') ||
-    query.includes('deal') ||
-    query.includes('pair')
+    normalized.includes('bundle') ||
+    normalized.includes('combo') ||
+    normalized.includes('offer') ||
+    normalized.includes('discount') ||
+    normalized.includes('deal') ||
+    normalized.includes('pair')
   ) {
-    const bundles = await BundleOffer.find({ status: 'approved' })
+    const bundleQuery = { status: 'approved' };
+    if (merchantId) bundleQuery.merchant = merchantId;
+
+    const bundles = await BundleOffer.find(bundleQuery)
       .populate({
         path: 'products.product',
         select: 'name price discountPrice images slug stock inStock',
@@ -65,19 +116,21 @@ export const processChatMessage = async ({ message, conversationHistory = [], ca
         message: `Here are our exclusive merchant-approved AI bundles! You can save up to ${bundles[0].discountPercentage}% when purchased together:`,
         type: 'bundle_offers',
         bundles,
-        suggestions: ['Show men’s essentials', 'Show women’s dresses', 'Checkout my bag'],
+        context: null,
+        suggestions: ["Show men's essentials", "Show women's dresses", 'Checkout my bag'],
       };
     }
   }
 
-  // 3. Specific item addition to cart intent
-  const addMatch = query.match(/(?:add|put)\s+(?:the\s+)?(.+?)(?:\s+to\s+(?:my\s+)?(?:cart|bag))/i);
-  if (addMatch) {
-    const targetName = addMatch[1].trim();
-    const product = await Product.findOne({
-      name: { $regex: targetName, $options: 'i' },
+  // 6. Handle Specific item addition to cart intent
+  if (intent.isCartAction && intent.cartTarget) {
+    const pQuery = {
+      name: { $regex: intent.cartTarget, $options: 'i' },
       isActive: true,
-    }).select('name price discountPrice images slug stock');
+    };
+    if (merchantId) pQuery.merchant = merchantId;
+
+    const product = await Product.findOne(pQuery).select('name price discountPrice images slug stock');
 
     if (product) {
       return {
@@ -88,61 +141,77 @@ export const processChatMessage = async ({ message, conversationHistory = [], ca
           product,
           quantity: 1,
         },
+        context: null,
         suggestions: ['View my cart', 'Show matching accessories', 'Proceed to checkout'],
+      };
+    } else {
+      return {
+        message: `I couldn't find "${intent.cartTarget}" to add to your bag. Would you like to browse our current luxury collection?`,
+        type: 'text',
+        context: null,
+        suggestions: ["Show men's collection", "Show women's collection", 'Footwear', 'Accessories'],
       };
     }
   }
 
-  // 4. Catalog Search & Product Recommendations
-  let searchFilter = { isActive: true };
-
-  if (query.includes('men') && !query.includes('women')) {
-    searchFilter.name = { $regex: 'shirt|tee|overcoat|oxford|men', $options: 'i' };
-  } else if (query.includes('women') || query.includes('dress')) {
-    searchFilter.name = { $regex: 'dress|blazer|sweater|women|tote', $options: 'i' };
-  } else if (query.includes('shoe') || query.includes('sneaker') || query.includes('boot')) {
-    searchFilter.name = { $regex: 'sneaker|boot|shoe|slip-on', $options: 'i' };
-  } else if (query.includes('watch') || query.includes('belt') || query.includes('bag') || query.includes('accessori')) {
-    searchFilter.name = { $regex: 'watch|belt|tote|bag', $options: 'i' };
-  }
-
-  // Price constraint extraction (e.g. "under 3000")
-  const priceMatch = query.match(/under\s+(?:₹|rs\.?|inr\s*)?(\d+)/i);
-  if (priceMatch) {
-    const max = Number(priceMatch[1]);
-    searchFilter.price = { $lte: max };
-  }
-
-  // If general greeting
-  if (query === 'hi' || query === 'hello' || query === 'hey') {
-    const featured = await Product.find({ isActive: true, featured: true }).limit(3);
+  // 7. Handle Out-Of-Catalog Queries (e.g., Ice Cream, Pizza, Laptops, Medicine, Furniture)
+  if (intent.isOutOfCatalog) {
+    const domainLabel = intent.outOfCatalogDomain || 'items outside fashion and accessories';
     return {
-      message: "Hello! Welcome to LuxeStyle. I'm your AI Shopping Concierge. I can help you discover luxury apparel, curated combos, check sizes, or guide you through seamless agentic checkout. What are you looking for today?",
-      type: 'product_results',
-      products: featured,
-      suggestions: ['✨ Curated AI Bundles', '👔 Men’s Collection', '👗 Women’s Dresses', '👟 Footwear'],
+      message: `LuxeStyle is an exclusive luxury fashion & lifestyle boutique specializing in designer apparel, footwear, and accessories. We do not carry ${domainLabel} such as "${query}". Would you like to explore our latest fashion collections instead?`,
+      type: 'text',
+      products: [],
+      context: intent,
+      suggestions: [
+        "Men's Collection",
+        "Women's Collection",
+        'Designer Footwear',
+        'Luxury Accessories',
+      ],
     };
   }
 
-  const products = await Product.find(searchFilter)
-    .sort({ soldCount: -1, createdAt: -1 })
-    .limit(4);
+  // 8. Catalog Search using extracted intent & filters
+  const searchResult = await searchCatalog(intent, { merchantId, limit: 6 });
 
-  if (products.length > 0) {
+  if (searchResult.products.length > 0) {
+    let responseText = "Here are the pieces that match your request:";
+    if (intent.categoryHint && intent.colors.length > 0) {
+      responseText = `Here are our ${intent.colors.join('/')} selections in ${intent.categoryHint}:`;
+    } else if (intent.categoryHint) {
+      responseText = `Here are our top selections from ${intent.categoryHint}:`;
+    } else if (intent.colors.length > 0) {
+      responseText = `Here are our ${intent.colors.join('/')} luxury pieces:`;
+    } else if (intent.maxPrice) {
+      responseText = `Here are our selections under ₹${intent.maxPrice.toLocaleString()}:`;
+    }
+
+    const suggestions = [];
+    if (!intent.maxPrice) suggestions.push('Under ₹3,000');
+    if (intent.colors.length === 0) suggestions.push('In Black or White');
+    if (!intent.sizes.length) suggestions.push('Size M or L');
+    suggestions.push('Checkout my bag');
+
     return {
-      message: `Here are the best pieces matching your style preferences:`,
-      type: 'product_results',
-      products,
-      suggestions: ['Show bundle deals', 'Items under ₹3,000', 'Proceed to checkout'],
+      message: responseText,
+      type: 'products',
+      products: searchResult.products,
+      context: intent,
+      suggestions: suggestions.slice(0, 4),
     };
   }
 
-  // Fallback: show trending items
-  const trending = await Product.find({ isActive: true }).sort({ soldCount: -1 }).limit(3);
+  // 9. When no products match the specific search
   return {
-    message: `I couldn't find an exact match for "${message}", but here are our most coveted best-sellers right now:`,
-    type: 'product_results',
-    products: trending,
-    suggestions: ['Show all products', 'View AI bundles', 'Help me style an outfit'],
+    message: `I couldn't find any products in our catalog matching "${query}". Would you like to browse our popular categories or filter by price?`,
+    type: 'text',
+    products: [],
+    context: intent,
+    suggestions: [
+      "Men's Oxford Shirts",
+      "Women's Silk Dresses",
+      'Designer Footwear',
+      'Luxury Accessories',
+    ],
   };
 };

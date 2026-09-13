@@ -1,5 +1,6 @@
 import { getAuth, clerkClient } from '@clerk/express';
 import User from '../models/User.js';
+import Merchant from '../models/Merchant.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { isDbConnected } from '../config/db.js';
@@ -36,6 +37,30 @@ const getOrCreateUser = async (clerkId) => {
   return user;
 };
 
+const syncAuthoritativeIdentity = async (user) => {
+  const merchant = await Merchant.findOne({ owner: user._id }).select('_id');
+  const clerkUser = await clerkClient.users.getUser(user.clerkId);
+  const clerkRole = clerkUser.publicMetadata?.role;
+
+  // Merchant access is relationship-based. Never trust a client-supplied role or
+  // a stale merchantId field to grant access to a store.
+  if (clerkRole === 'admin' || user.role === 'admin') {
+    user.role = 'admin';
+  } else if (merchant) {
+    user.role = 'merchant';
+  } else {
+    user.role = 'user';
+  }
+
+  const merchantId = merchant?._id?.toString();
+  if (user.merchantId?.toString() !== merchantId) {
+    user.merchantId = merchant?._id;
+    await user.save();
+  }
+
+  return user;
+};
+
 /** Requires a valid Clerk session; attaches the local Mongo user doc as req.user. */
 export const requireAuth = asyncHandler(async (req, res, next) => {
   if (!isClerkConfigured) {
@@ -43,40 +68,13 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   }
 
   const { userId } = getAuth(req);
-  if (!userId && process.env.NODE_ENV !== 'production') {
-    // Development/Test harness: allow testing with a specific real user ID
-    const testUserId = req.headers['x-test-user-id'];
-    if (testUserId) {
-      const testUser = await User.findById(testUserId);
-      if (testUser) {
-        req.user = testUser;
-        return next();
-      }
-    }
-
-    const demoRole = req.headers['x-demo-role'];
-    if (demoRole === 'admin') {
-      const admin = await User.findOne({ role: 'admin' });
-      if (admin) {
-        req.user = admin;
-        return next();
-      }
-    }
-    if (demoRole === 'merchant') {
-      const merchant = await User.findOne({ role: 'merchant' });
-      if (merchant) {
-        req.user = merchant;
-        return next();
-      }
-    }
-    throw new ApiError(401, 'Not authenticated');
-  }
+  if (!userId) throw new ApiError(401, 'Not authenticated');
 
   if (!isDbConnected()) {
     throw new ApiError(503, 'Database is not connected yet.');
   }
 
-  req.user = await getOrCreateUser(userId);
+  req.user = await syncAuthoritativeIdentity(await getOrCreateUser(userId));
   next();
 });
 
@@ -86,7 +84,7 @@ export const attachUserIfPresent = asyncHandler(async (req, res, next) => {
 
   const { userId } = getAuth(req);
   if (userId) {
-    req.user = await getOrCreateUser(userId);
+    req.user = await syncAuthoritativeIdentity(await getOrCreateUser(userId));
   }
   next();
 });

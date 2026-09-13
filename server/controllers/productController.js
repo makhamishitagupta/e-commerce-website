@@ -1,7 +1,5 @@
 import Product from '../models/Product.js';
 import Merchant from '../models/Merchant.js';
-import Category from '../models/Category.js';
-import Brand from '../models/Brand.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -32,13 +30,15 @@ export const getProducts = asyncHandler(async (req, res) => {
   } = req.query;
 
   const filter = {};
+  if (!req.user || req.user.role !== 'admin') filter.merchant = { $exists: true, $ne: null };
   const canViewInactive =
     includeInactive === 'true' && (req.user?.role === 'admin' || req.user?.role === 'merchant');
   if (!canViewInactive) filter.isActive = true;
 
   if (req.user?.role === 'merchant') {
     const owned = await Merchant.findOne({ owner: req.user._id }).select('_id');
-    if (owned) filter.merchant = owned._id;
+    if (!owned) throw new ApiError(404, 'Merchant store is not configured');
+    filter.merchant = owned._id;
   } else if (merchant) {
     filter.merchant = merchant;
   }
@@ -95,6 +95,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const products = await Product.find({
     isActive: true,
+    merchant: { $exists: true, $ne: null },
     $or: [
       { name: { $regex: escapedTerm, $options: 'i' } },
       { description: { $regex: escapedTerm, $options: 'i' } },
@@ -107,7 +108,11 @@ export const searchProducts = asyncHandler(async (req, res) => {
 });
 
 export const getProductBySlug = asyncHandler(async (req, res) => {
-  const product = await Product.findOne({ slug: req.params.slug, isActive: true })
+  const product = await Product.findOne({
+    slug: req.params.slug,
+    isActive: true,
+    merchant: { $exists: true, $ne: null },
+  })
     .populate('category', 'name slug')
     .populate('brand', 'name slug')
     .populate({ path: 'reviews', populate: { path: 'user', select: 'name avatar' } });
@@ -121,6 +126,12 @@ export const createProduct = asyncHandler(async (req, res) => {
   const { name, sku, ...rest } = req.body;
   if (!name) throw new ApiError(400, 'name is required');
   if (!sku) throw new ApiError(400, 'sku is required');
+    if (!rest.description?.trim()) throw new ApiError(400, 'description is required');
+    if (!rest.category) throw new ApiError(400, 'category is required');
+    if (!rest.brand) throw new ApiError(400, 'brand is required');
+    if (!Array.isArray(rest.images) || rest.images.length === 0 || !rest.images[0]?.url) {
+      throw new ApiError(400, 'At least one product image is required');
+    }
 
   let merchantId = req.body.merchant;
   if (req.user?.role === 'merchant') {
@@ -135,33 +146,8 @@ export const createProduct = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Merchant or Admin access required');
   }
 
-  let categoryId = rest.category;
-  if (!categoryId) {
-    const defaultCat = await Category.findOne();
-    if (defaultCat) categoryId = defaultCat._id;
-  }
-
-  let brandId = rest.brand;
-  if (!brandId) {
-    const defaultBrand = await Brand.findOne();
-    if (defaultBrand) brandId = defaultBrand._id;
-  }
-
-  let images = rest.images;
-  if (!images || !Array.isArray(images) || images.length === 0) {
-    images = [
-      {
-        url: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=800&h=1000&fit=crop',
-        publicId: 'default_product_img',
-      },
-    ];
-  }
-
   const product = await Product.create({
     ...rest,
-    category: categoryId,
-    brand: brandId,
-    images,
     name,
     sku,
     slug: slugify(name),
@@ -173,37 +159,69 @@ export const createProduct = asyncHandler(async (req, res) => {
 
 export const updateProduct = asyncHandler(async (req, res) => {
   const update = { ...req.body };
+  delete update.merchant;
+  delete update.soldCount;
+  delete update.reviews;
+  delete update.ratings;
   if (update.name) update.slug = slugify(update.name);
 
+  let merchant;
   if (req.user?.role === 'merchant') {
-    const m = await Merchant.findOne({ owner: req.user._id });
+    merchant = await Merchant.findOne({ owner: req.user._id }).select('_id');
     const existing = await Product.findById(req.params.id);
     if (!existing) throw new ApiError(404, 'Product not found');
-    if (!m || !existing.merchant || existing.merchant.toString() !== m._id.toString()) {
+    if (!merchant || !existing.merchant || existing.merchant.toString() !== merchant._id.toString()) {
       throw new ApiError(403, 'You can only update your own products');
     }
   }
 
-  const product = await Product.findByIdAndUpdate(req.params.id, update, {
-    new: true,
-    runValidators: true,
-  });
+  const product = await Product.findOneAndUpdate(
+    merchant ? { _id: req.params.id, merchant: merchant._id } : { _id: req.params.id },
+    update,
+    { new: true, runValidators: true }
+  );
   if (!product) throw new ApiError(404, 'Product not found');
 
   res.json(new ApiResponse(200, product, 'Product updated'));
 });
 
+export const adjustProductStock = asyncHandler(async (req, res) => {
+  const adjustment = Number(req.body.adjustment);
+  if (!Number.isInteger(adjustment) || adjustment === 0) {
+    throw new ApiError(400, 'adjustment must be a non-zero integer');
+  }
+
+  const merchant = req.user?.role === 'merchant'
+    ? await Merchant.findOne({ owner: req.user._id }).select('_id')
+    : null;
+  const filter = merchant ? { _id: req.params.id, merchant: merchant._id } : { _id: req.params.id };
+  const product = await Product.findOne(filter);
+  if (!product) throw new ApiError(404, 'Product not found');
+
+  const nextStock = product.stock + adjustment;
+  if (nextStock < 0) throw new ApiError(400, 'Stock cannot be negative');
+  product.stock = nextStock;
+  await product.save();
+  res.json(new ApiResponse(200, product, 'Stock updated'));
+});
+
 export const deleteProduct = asyncHandler(async (req, res) => {
+  const merchant = req.user?.role === 'merchant'
+    ? await Merchant.findOne({ owner: req.user._id }).select('_id')
+    : null;
   if (req.user?.role === 'merchant') {
-    const m = await Merchant.findOne({ owner: req.user._id });
     const existing = await Product.findById(req.params.id);
     if (!existing) throw new ApiError(404, 'Product not found');
-    if (!m || !existing.merchant || existing.merchant.toString() !== m._id.toString()) {
+    if (!merchant || !existing.merchant || existing.merchant.toString() !== merchant._id.toString()) {
       throw new ApiError(403, 'You can only delete your own products');
     }
   }
 
-  const product = await Product.findByIdAndDelete(req.params.id);
+  const product = await Product.findOneAndUpdate(
+    merchant ? { _id: req.params.id, merchant: merchant._id } : { _id: req.params.id },
+    { isActive: false },
+    { new: true }
+  );
   if (!product) throw new ApiError(404, 'Product not found');
-  res.json(new ApiResponse(200, null, 'Product deleted'));
+  res.json(new ApiResponse(200, product, 'Product archived'));
 });

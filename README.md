@@ -6,27 +6,28 @@
 
 ## 🎯 Feature Overview
 
-| Feature | Status |
-|---|---|
-| Storefront (Catalog, Cart, Wishlist, Search) | ✅ Production |
-| Clerk Authentication & Role Management | ✅ Production |
-| Admin Panel (Products, Orders, Customers, Reports) | ✅ Production |
-| Merchant Onboarding & Store Registration | ✅ Production |
-| AI Transaction Intelligence (Market Basket Analysis) | ✅ Production |
-| Bundle Suggestion & Merchant Approval Workflow | ✅ Production |
-| Agent-Ready Commerce API (`/api/agent/v1`) | ✅ Production |
-| OpenAPI 3.0 Specification & LLM Tool Schemas | ✅ Production |
-| AI Shopping Concierge Chat (Float Drawer) | ✅ Production |
-| Razorpay TEST Checkout with HMAC-SHA256 Verification | ✅ Production |
-| Agentic Checkout Session (Customer Authorization) | ✅ Production |
-| Merchant AI Dashboard (Revenue, Analytics, Agent Stats) | ✅ Production |
-| MongoDB Persistence (all features real — no mocks) | ✅ Production |
+| Feature                                                 | 
+| ------------------------------------------------------- | 
+| Storefront (Catalog, Cart, Wishlist, Search)            | 
+| Clerk Authentication & Role Management                  | 
+| Admin Panel (Products, Orders, Customers, Reports)      | 
+| Merchant Onboarding & Store Registration                | 
+| AI Transaction Intelligence (Market Basket Analysis)    | 
+| Bundle Suggestion & Merchant Approval Workflow          | 
+| Agent-Ready Commerce API (`/api/agent/v1`)              | 
+| OpenAPI 3.0 Specification & LLM Tool Schemas            | 
+| AI Shopping Concierge Chat (Float Drawer)               | 
+| Razorpay TEST Checkout with HMAC-SHA256 Verification    | 
+| Agentic Checkout Session (Customer Authorization)       | 
+| Merchant AI Dashboard (Revenue, Analytics, Agent Stats) | 
+| MongoDB Persistence (all features real — no mocks)      | 
 
 ---
 
 ## 🚀 Quick Setup
 
 ### Prerequisites
+
 - Node.js 20+
 - MongoDB (local or Atlas)
 
@@ -55,43 +56,11 @@ cd server
 cp .env.example .env
 ```
 
-Edit `server/.env`:
-
-```env
-PORT=5000
-NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-MONGODB_URI=mongodb://localhost:27017/luxestyle
-
-# Clerk Authentication
-CLERK_SECRET_KEY=sk_test_YOUR_KEY_HERE
-CLERK_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE
-CLERK_WEBHOOK_SECRET=whsec_YOUR_WEBHOOK_SECRET
-
-# Cloudinary (for product image uploads)
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-
-# === RAZORPAY TEST CONFIGURATION ===
-# Get from: https://dashboard.razorpay.com → Settings → API Keys → Test Mode
-RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_ID
-RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
-# If not set, the system uses a development simulation fallback with full HMAC verification.
-```
-
 ### 3. Client Environment
 
 ```bash
 cd client
 cp .env.example .env
-```
-
-Edit `client/.env`:
-
-```env
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE
-VITE_API_BASE_URL=http://localhost:5000/api
 ```
 
 ### 4. Seed the Database
@@ -102,11 +71,12 @@ npm run seed
 ```
 
 This seeds:
+
 - 4 categories, 4 brands, **12 luxury products**
 - **1 flagship merchant store** (LuxeStyle Flagship Atelier)
 - **29 historical orders** with multi-item co-purchase baskets for transaction intelligence
 - **2 AI bundle offers** (1 approved, 1 pending)
-- **Agent API key**: `lx_test_agent_key_2026`
+- **Agent API key**: generated from the merchant portal after onboarding
 
 ### 5. Start Development Servers
 
@@ -129,7 +99,7 @@ Visit: **http://localhost:5173**
 All agent endpoints require a merchant-issued API key via `X-Agent-Key` header:
 
 ```http
-X-Agent-Key: lx_test_agent_key_2026
+X-Agent-Key: YOUR_MERCHANT_AGENT_KEY
 ```
 
 ### Base URL
@@ -152,37 +122,37 @@ curl http://localhost:5000/api/agent/v1/tools
 
 ```bash
 # 1. Search catalog
-curl -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   "http://localhost:5000/api/agent/v1/catalog?query=dress&maxPrice=5000"
 
 # 2. Get approved bundle offers
-curl -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   "http://localhost:5000/api/agent/v1/offers"
 
 # 3. Check availability
-curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -X POST -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{"items":[{"productId":"PRODUCT_ID","quantity":1}]}' \
   "http://localhost:5000/api/agent/v1/check-availability"
 
 # 4. Create agent cart
-curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -X POST -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   "http://localhost:5000/api/agent/v1/cart"
 
 # 5. Add item to cart
-curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -X POST -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{"productId":"PRODUCT_ID","quantity":1}' \
   "http://localhost:5000/api/agent/v1/cart/CART_ID/items"
 
 # 6. Apply approved bundle
-curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -X POST -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{"bundleId":"BUNDLE_ID"}' \
   "http://localhost:5000/api/agent/v1/cart/CART_ID/apply-bundle"
 
 # 7. Initiate agentic checkout — PAUSES for explicit customer authorization
-curl -X POST -H "X-Agent-Key: lx_test_agent_key_2026" \
+curl -X POST -H "X-Agent-Key: YOUR_MERCHANT_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "cartId":"CART_ID",
@@ -213,7 +183,7 @@ curl -X POST -H "Content-Type: application/json" \
 2. Navigate to **Settings → API Keys**
 3. Ensure you are in **Test Mode** (toggle at the top)
 4. Click **"Generate Test Key"**
-5. Copy your `Key ID` (rzp_test_...) and `Key Secret`
+5. Copy your `Key ID` (rzp*test*...) and `Key Secret`
 6. Add to `server/.env`:
 
 ```env
@@ -223,15 +193,16 @@ RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
 
 ### Test Card Numbers (Razorpay TEST Mode)
 
-| Card | Number | CVV | Expiry |
-|---|---|---|---|
-| Visa (Success) | 4111 1111 1111 1111 | Any 3 digits | Any future date |
-| Mastercard (Success) | 5104 0155 5555 5558 | Any | Any future |
-| UPI (Success) | success@razorpay | — | — |
+| Card                 | Number              | CVV          | Expiry          |
+| -------------------- | ------------------- | ------------ | --------------- |
+| Visa (Success)       | 4111 1111 1111 1111 | Any 3 digits | Any future date |
+| Mastercard (Success) | 5104 0155 5555 5558 | Any          | Any future      |
+| UPI (Success)        | success@razorpay    | —            | —               |
 
 ### Simulation Mode (No API Keys Required)
 
 If Razorpay keys are not configured, the system automatically activates a **browser simulation mode** that:
+
 - Generates a local Razorpay order ID
 - Shows a browser confirmation dialog simulating the payment popup
 - Performs **real HMAC-SHA256 verification** with the development signature format
@@ -242,19 +213,20 @@ If Razorpay keys are not configured, the system automatically activates a **brow
 ## 🏪 Merchant Portal
 
 ### Access
+
 Navigate to **http://localhost:5173/merchant** or click "Merchant Portal" in the navbar.
 
 Click **"Launch Flagship Store Demo →"** for instant access with pre-seeded historical data.
 
 ### Dashboard Tabs
 
-| Tab | Contents |
-|---|---|
-| **Overview & Sales** | Revenue metrics, Agent vs Direct breakdown, recent orders, low stock alerts |
+| Tab                             | Contents                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Overview & Sales**            | Revenue metrics, Agent vs Direct breakdown, recent orders, low stock alerts              |
 | **AI Transaction Intelligence** | Run correlation analysis, review AI-suggested bundles, approve/reject, view live bundles |
-| **Agent Commerce Hub & APIs** | API key management, interactive agent sandbox, OpenAPI & Tools JSON viewer |
-| **Products** | Merchant catalog with stock and sales data |
-| **Orders** | Order history with agent/direct source attribution |
+| **Agent Commerce Hub & APIs**   | API key management, interactive agent sandbox, OpenAPI & Tools JSON viewer               |
+| **Products**                    | Merchant catalog with stock and sales data                                               |
+| **Orders**                      | Order history with agent/direct source attribution                                       |
 
 ### Running AI Transaction Intelligence
 
@@ -280,66 +252,32 @@ The **floating AI Concierge button** (bottom-right on all pages) opens a convers
 - Syncs in real-time with the cart (count badge updates instantly)
 
 **Example queries:**
+
 - "Show me silk dresses under ₹5000"
 - "Show bundle deals"
 - "Add Oxford Shirt to my bag"
 - "I want to checkout"
 - "Men's clothing"
 
----
-
-## 🏗️ Backend Architecture
-
-```
-server/
-├── models/
-│   ├── User.js              # Extended with merchant role + merchantId
-│   ├── Product.js           # Extended with merchant reference
-│   ├── Order.js             # Extended with Razorpay, agent, merchant fields
-│   ├── Merchant.js          # Merchant store & settings
-│   ├── AgentApiKey.js       # API key auth for external agents
-│   ├── BundleOffer.js       # AI-suggested & approved bundles
-│   ├── AgentCart.js         # Stateless headless cart for agents
-│   └── AgentCheckoutSession.js  # Agentic checkout auth lifecycle
-├── controllers/
-│   ├── merchantController.js   # Onboarding, dashboard, analysis
-│   ├── agentApiController.js   # Agent-ready commerce API endpoints
-│   ├── paymentController.js    # Razorpay CREATE & VERIFY
-│   └── chatController.js       # AI shopping concierge
-├── services/
-│   ├── transactionIntelligenceService.js  # Market basket analysis
-│   └── aiChatService.js                   # Conversational AI logic
-├── middleware/
-│   └── agentAuth.js         # X-Agent-Key verification & scopes
-├── config/
-│   └── razorpay.js          # Razorpay init + HMAC verification helper
-└── utils/
-    ├── seed.js              # Enhanced seeder with merchant + historical orders
-    └── testCompleteFlow.js  # Automated 13-step E2E verification script
-```
 
 ---
 
 ## 🔒 Security Architecture
 
-| Layer | Implementation |
-|---|---|
-| User Auth | Clerk JWT validation via `@clerk/express` |
-| Agent Auth | HMAC-SHA256 hashed API keys stored in MongoDB, constant-time comparison |
-| Payment Verification | Razorpay HMAC-SHA256 signature verification with `razorpay_order_id + razorpay_payment_id` |
-| Human Authorization | Agentic checkouts **always** require explicit customer approval — agents cannot auto-pay |
-| Scope Permissions | Agent keys can be restricted to specific scopes (`catalog:read`, `cart:write`, `checkout:write`, `analytics:read`) |
-| Role-Based Access | `admin`, `merchant`, `user` roles, all enforced server-side |
+| Layer                | Implementation                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| User Auth            | Clerk JWT validation via `@clerk/express`                                                                          |
+| Agent Auth           | HMAC-SHA256 hashed API keys stored in MongoDB, constant-time comparison                                            |
+| Payment Verification | Razorpay HMAC-SHA256 signature verification with `razorpay_order_id + razorpay_payment_id`                         |
+| Human Authorization  | Agentic checkouts **always** require explicit customer approval — agents cannot auto-pay                           |
+| Scope Permissions    | Agent keys can be restricted to specific scopes (`catalog:read`, `cart:write`, `checkout:write`, `analytics:read`) |
+| Role-Based Access    | `admin`, `merchant`, `user` roles, all enforced server-side                                                        |
 
 ---
 
-## 🔑 Demo API Key (Development)
+## Agent Key Handling
 
-```
-X-Agent-Key: lx_test_agent_key_2026
-```
-
-Valid for all scopes on the seeded LuxeStyle Flagship merchant store. Reset with `npm run seed`.
+Create an agent key from the authenticated Merchant Portal. The raw key is shown only once; store it securely and use it in the `X-Agent-Key` header.
 
 ---
 

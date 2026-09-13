@@ -174,11 +174,10 @@ export const AiShoppingAssistant = () => {
       <div className="fixed bottom-6 right-6 z-50">
         <button
           onClick={() => setIsOpen((o) => !o)}
-          className={`group inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 ${
-            isOpen
+          className={`group inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 ${isOpen
               ? 'bg-ink-100 text-ink-900 dark:bg-ink-800 dark:text-white'
               : 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-          }`}
+            }`}
           aria-label="Toggle AI Concierge"
         >
           {isOpen ? (
@@ -224,11 +223,10 @@ export const AiShoppingAssistant = () => {
               >
                 {/* Bubble */}
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed ${
-                    msg.role === 'user'
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed ${msg.role === 'user'
                       ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
                       : 'border border-ink-200 bg-white text-ink-700 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-200'
-                  }`}
+                    }`}
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 </div>

@@ -7,12 +7,6 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const agentKey = localStorage.getItem('luxestyle-agent-key');
-    if (agentKey) {
-      config.headers['x-agent-key'] = agentKey;
-    }
-  }
   return config;
 });
 
@@ -26,10 +20,6 @@ export const attachAuthInterceptor = (getToken) => {
     const token = await getToken?.();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-    const agentKey = typeof window !== 'undefined' ? localStorage.getItem('luxestyle-agent-key') : null;
-    if (agentKey) {
-      config.headers['x-agent-key'] = agentKey;
     }
     return config;
   });

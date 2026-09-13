@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Merchant from '../models/Merchant.js';
 import { resolveSingleActiveMerchant } from '../utils/resolveMerchantForOrder.js';
+import { resolveMerchantForReq } from './merchantController.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -76,7 +77,8 @@ export const getOrderById = asyncHandler(async (req, res) => {
   if (!order) throw new ApiError(404, 'Order not found');
   const isOwner = order.user?._id?.toString() === req.user._id.toString();
   const isAdmin = req.user.role === 'admin';
-  const isStoreMerchant = req.user.role === 'merchant' && order.merchant && req.user.merchantId && order.merchant.toString() === req.user.merchantId.toString();
+  const merchant = req.user.role === 'merchant' ? await resolveMerchantForReq(req) : null;
+  const isStoreMerchant = Boolean(merchant && order.merchant?.toString() === merchant._id.toString());
 
   if (!isOwner && !isAdmin && !isStoreMerchant) {
     throw new ApiError(403, 'Not authorized to view this order');
@@ -91,14 +93,23 @@ export const getAllOrders = asyncHandler(async (req, res) => {
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
+  const allowedStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+  if (!allowedStatuses.includes(status)) throw new ApiError(400, 'Invalid order status');
   const order = await Order.findById(req.params.id);
   if (!order) throw new ApiError(404, 'Order not found');
 
-  if (req.user.role === 'merchant' && (!req.user.merchantId || !order.merchant || order.merchant.toString() !== req.user.merchantId.toString())) {
+  const merchant = req.user.role === 'merchant' ? await resolveMerchantForReq(req) : null;
+  if (req.user.role === 'merchant' && (!merchant || !order.merchant || order.merchant.toString() !== merchant._id.toString())) {
     throw new ApiError(403, 'You can only update orders for your own store');
   }
 
   const previousStatus = order.orderStatus;
+  if (previousStatus === 'cancelled' || previousStatus === 'delivered') {
+    throw new ApiError(409, 'Completed or cancelled orders cannot be changed');
+  }
+  if (status === 'pending' && previousStatus !== 'pending') throw new ApiError(400, 'Orders cannot move back to pending');
+  if (status === 'processing' && previousStatus !== 'pending') throw new ApiError(400, 'Orders must be pending before processing');
+  if (status === 'shipped' && previousStatus !== 'processing') throw new ApiError(400, 'Orders must be processing before shipping');
   const wasPaid = order.paymentStatus === 'paid';
 
   order.orderStatus = status;

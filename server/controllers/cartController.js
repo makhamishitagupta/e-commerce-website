@@ -32,18 +32,6 @@ export const addToCart = asyncHandler(async (req, res) => {
   if (!product) throw new ApiError(404, 'Product not found');
   if (product.stock < Number(quantity)) throw new ApiError(400, `${product.name} has insufficient stock`);
 
-  if (req.user.cart.length > 0 && product.merchant) {
-    const existingProducts = await Product.find({
-      _id: { $in: req.user.cart.map((item) => item.product) },
-    }).select('merchant');
-    const cartMerchants = [
-      ...new Set(existingProducts.map((p) => p.merchant?.toString()).filter(Boolean)),
-    ];
-    if (cartMerchants.some((id) => id !== product.merchant.toString())) {
-      throw new ApiError(400, 'Your bag can only contain items from one boutique. Remove other items first.');
-    }
-  }
-
   const existing = req.user.cart.find((item) => item.product.toString() === product._id.toString());
   if (existing) {
     if (product.stock < existing.quantity + Number(quantity)) {

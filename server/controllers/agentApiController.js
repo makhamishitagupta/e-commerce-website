@@ -214,6 +214,25 @@ export const getActiveOffers = asyncHandler(async (req, res) => {
   });
 });
 
+export const getAgentAnalytics = asyncHandler(async (req, res) => {
+  const [orders, revenue] = await Promise.all([
+    Order.countDocuments({ merchant: req.merchantId, isAgentOrder: true }),
+    Order.aggregate([
+      { $match: { merchant: req.merchantId, isAgentOrder: true, paymentStatus: 'paid', orderStatus: { $ne: 'cancelled' } } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+    ]),
+  ]);
+
+  res.json({
+    status: 'success',
+    data: {
+      merchantId: req.merchantId,
+      agentOrders: orders,
+      paidAgentRevenue: revenue[0]?.total || 0,
+    },
+  });
+});
+
 /**
  * Initialize / Create Agent Cart
  */

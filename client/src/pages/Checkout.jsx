@@ -111,21 +111,31 @@ export const Checkout = () => {
   }
 
   const shippingPrice = subtotal >= 2000 ? 0 : 99;
-  const totalAmount = subtotal + shippingPrice;
+  const merchantGroups = Object.values(activeItems.reduce((groups, item) => {
+    const merchantId = item.product.merchant?._id || item.product.merchant || 'unassigned';
+    groups[merchantId] = groups[merchantId] || [];
+    groups[merchantId].push(item);
+    return groups;
+  }, {}));
+  const totalShippingPrice = merchantGroups.reduce((total, group) => {
+    const groupSubtotal = group.reduce((sum, item) => sum + (item.product.discountPrice || item.product.price) * item.quantity, 0);
+    return total + (groupSubtotal >= 2000 ? 0 : 99);
+  }, 0);
+  const totalAmount = subtotal + (merchantGroups.length > 1 ? totalShippingPrice : shippingPrice);
 
   const onSubmit = async (shippingAddress) => {
     setPlacing(true);
-    const items = activeItems.map((item) => ({
+    const groupedItems = merchantGroups.map((group) => group.map((item) => ({
       productId: item.product._id,
       quantity: item.quantity,
-    }));
+    })));
 
     if (paymentMethod === 'COD') {
       try {
-        const res = await api.post('/orders', { items, shippingAddress });
+        const orders = await Promise.all(groupedItems.map((items) => api.post('/orders', { items, shippingAddress })));
         await clearCart();
-        toast.success('Order placed via Cash on Delivery!');
-        navigate(`/orders/${res.data.data._id}`);
+        toast.success(`${orders.length} order${orders.length === 1 ? '' : 's'} placed via Cash on Delivery!`);
+        navigate(`/orders/${orders[0].data.data._id}`);
       } catch (err) {
         toast.error(err.message || 'Failed to place order');
       } finally {
@@ -134,48 +144,30 @@ export const Checkout = () => {
       return;
     }
 
-    // Razorpay TEST Flow
+    // Each boutique is charged separately so order ownership and settlement remain unambiguous.
     try {
-      const orderRes = await api.post('/payment/create-order', {
-        items,
-        shippingAddress,
-      });
-
-      const { orderId, amount, currency, keyId } = orderRes.data.data;
-
-      await openRazorpayModal({
-        orderId,
-        amount,
-        currency,
-        keyId,
-        customer: shippingAddress,
-        onSuccess: async (rzpResponse) => {
-          const verifyToast = toast.loading('Verifying payment signature with backend...');
-          try {
-            const verifyRes = await api.post('/payment/verify', {
-              razorpay_order_id: rzpResponse.razorpay_order_id,
-              razorpay_payment_id: rzpResponse.razorpay_payment_id,
-              razorpay_signature: rzpResponse.razorpay_signature,
-              items,
-              shippingAddress,
-            });
-
-            await clearCart();
-            toast.dismiss(verifyToast);
-            toast.success('Payment verified & order created!');
-            navigate(`/orders/${verifyRes.data.data._id}`);
-          } catch (verErr) {
-            toast.dismiss(verifyToast);
-            toast.error(verErr.message || 'Payment verification failed');
-          } finally {
-            setPlacing(false);
-          }
-        },
-        onError: (err) => {
-          setPlacing(false);
-          toast.error(err.message || 'Payment was not completed');
-        },
-      });
+      const createdOrders = [];
+      for (const items of groupedItems) {
+        const orderRes = await api.post('/payment/create-order', { items, shippingAddress });
+        const payment = orderRes.data.data;
+        const response = await new Promise((resolve, reject) => openRazorpayModal({
+          ...payment,
+          customer: shippingAddress,
+          onSuccess: resolve,
+          onError: reject,
+        }));
+        const verifyRes = await api.post('/payment/verify', {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+          items,
+          shippingAddress,
+        });
+        createdOrders.push(verifyRes.data.data);
+      }
+      await clearCart();
+      toast.success(`${createdOrders.length} payment${createdOrders.length === 1 ? '' : 's'} verified and order${createdOrders.length === 1 ? '' : 's'} created`);
+      navigate(`/orders/${createdOrders[0]._id}`);
     } catch (err) {
       setPlacing(false);
       toast.error(err.message || 'Failed to initiate Razorpay checkout');
@@ -352,7 +344,7 @@ export const Checkout = () => {
           <ul className="divide-y divide-ink-100 dark:divide-ink-800 max-h-60 overflow-y-auto pr-1">
             {activeItems.map((item) => (
               <li key={item.product._id} className="flex justify-between py-2.5 text-xs">
-                <span className="text-ink-700 dark:text-ink-300 truncate max-w-[200px]">
+                <span className="text-ink-700 dark:text-ink-300 truncate max-w-50">
                   {item.product.name} <span className="text-ink-400">× {item.quantity}</span>
                 </span>
                 <span className="font-medium text-ink-900 dark:text-white">

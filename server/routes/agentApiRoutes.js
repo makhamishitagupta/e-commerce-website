@@ -5,6 +5,7 @@ import {
   getProductDetails,
   checkAvailability,
   getActiveOffers,
+  getAgentAnalytics,
   createCart,
   getCart,
   addItemToCart,
@@ -32,6 +33,7 @@ router.get('/products', requireAgentScope('catalog:read'), searchCatalog);
 router.get('/products/:idOrSlug', requireAgentScope('catalog:read'), getProductDetails);
 router.post('/check-availability', requireAgentScope('catalog:read'), checkAvailability);
 router.get('/offers', requireAgentScope('catalog:read'), getActiveOffers);
+router.get('/analytics', requireAgentScope('analytics:read'), getAgentAnalytics);
 
 router.post('/cart', requireAgentScope('cart:write'), createCart);
 router.get('/cart/:cartId', requireAgentScope('cart:write'), getCart);

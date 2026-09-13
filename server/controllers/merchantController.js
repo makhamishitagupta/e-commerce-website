@@ -18,7 +18,7 @@ import { slugify } from '../utils/slugify.js';
  * - If user is Merchant: strictly scoped to their own store (`owner: req.user._id`).
  * - Otherwise: throws 403 Forbidden.
  */
-const resolveMerchantForReq = async (req) => {
+export const resolveMerchantForReq = async (req) => {
   if (!req.user) {
     throw new ApiError(401, 'Authentication required');
   }
@@ -34,18 +34,13 @@ const resolveMerchantForReq = async (req) => {
   const targetId = req.query?.merchantId || req.body?.merchantId;
   if (isAdmin && targetId) {
     const specific = await Merchant.findById(targetId);
-    if (specific) return specific;
+    if (!specific) throw new ApiError(404, 'Merchant not found');
+    return specific;
   }
 
   // If user owns a merchant store
   let merchant = await Merchant.findOne({ owner: req.user._id });
   if (merchant) return merchant;
-
-  // Admin fallback: default to first active merchant if no owned store
-  if (isAdmin) {
-    merchant = await Merchant.findOne({ status: 'active' });
-    if (merchant) return merchant;
-  }
 
   return null;
 };
@@ -334,6 +329,12 @@ export const getMerchantApiKeys = asyncHandler(async (req, res) => {
 
 export const createMerchantApiKey = asyncHandler(async (req, res) => {
   const { name = 'External AI Agent', permissions } = req.body;
+  const allowedPermissions = ['catalog:read', 'cart:write', 'checkout:write', 'analytics:read'];
+  const requestedPermissions = Array.isArray(permissions) ? [...new Set(permissions)] : allowedPermissions;
+  if (requestedPermissions.some((permission) => !allowedPermissions.includes(permission))) {
+    throw new ApiError(400, 'One or more API key permissions are invalid');
+  }
+  if (requestedPermissions.length === 0) throw new ApiError(400, 'At least one API key permission is required');
 
   const merchant = await resolveMerchantForReq(req);
   if (!merchant) throw new ApiError(404, 'Merchant not found');
@@ -345,7 +346,7 @@ export const createMerchantApiKey = asyncHandler(async (req, res) => {
     name,
     keyPrefix,
     keyHash,
-    permissions: permissions || ['catalog:read', 'cart:write', 'checkout:write', 'analytics:read'],
+    permissions: requestedPermissions,
     createdByUser: req.user._id,
   });
 

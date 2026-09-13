@@ -7,7 +7,11 @@ import BundleOffer from '../models/BundleOffer.js';
  * Computes Support, Confidence, Lift, and Co-occurrence frequencies directly on MongoDB transactions.
  */
 export const analyzeTransactions = async (merchantId) => {
-  const query = merchantId ? { merchant: merchantId } : {};
+  const query = {
+    ...(merchantId ? { merchant: merchantId } : {}),
+    paymentStatus: 'paid',
+    orderStatus: { $ne: 'cancelled' },
+  };
   const orders = await Order.find(query).select('items totalAmount createdAt paymentStatus');
 
   const totalOrders = orders.length;

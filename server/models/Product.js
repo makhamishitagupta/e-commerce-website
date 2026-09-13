@@ -31,7 +31,8 @@ const productSchema = new mongoose.Schema(
     trending: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     soldCount: { type: Number, default: 0 },
-    merchant: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant' },
+    // Legacy orphan records may still exist, but every newly-created product must belong to a merchant.
+    merchant: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant', required: true },
   },
   { timestamps: true }
 );

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { api } from '../services/api.js';
-import { isClerkConfigured } from '../utils/constants.js';
 
 /** Fetches the synced Mongo user (role, addresses, wishlist, cart) for the signed-in Clerk session. */
 export const useCurrentUser = () => {
@@ -13,19 +12,7 @@ export const useCurrentUser = () => {
   useEffect(() => {
     if (!isLoaded) return;
 
-    const demoRole = !isClerkConfigured && typeof window !== 'undefined'
-      ? localStorage.getItem('luxestyle-demo-role')
-      : null;
-
     if (!isSignedIn) {
-      if (demoRole === 'admin' || demoRole === 'merchant') {
-        api
-          .get('/users/me')
-          .then((res) => setUser(res.data.data))
-          .catch(() => setUser({ role: demoRole, name: demoRole === 'admin' ? 'Administrator' : 'Merchant' }))
-          .finally(() => setLoading(false));
-        return;
-      }
       setUser(null);
       setLoading(false);
       return;

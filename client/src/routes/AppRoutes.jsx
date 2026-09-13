@@ -28,6 +28,7 @@ import { AdminReports } from '../pages/admin/Reports.jsx';
 
 import { MerchantOnboarding } from '../pages/merchant/Onboarding.jsx';
 import { MerchantDashboard } from '../pages/merchant/Dashboard.jsx';
+import { MerchantSettings } from '../pages/merchant/Settings.jsx';
 
 export const AppRoutes = () => (
   <Routes>
@@ -43,6 +44,7 @@ export const AppRoutes = () => (
       </Route>
       <Route element={<MerchantRoute />}>
         <Route path="/merchant" element={<MerchantDashboard />} />
+        <Route path="/merchant/settings" element={<MerchantSettings />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>

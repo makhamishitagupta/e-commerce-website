@@ -421,7 +421,7 @@ const run = async () => {
 
   console.log(`[seed] Inserted:`);
   console.log(`  - 1 Merchant: ${flagshipMerchant.storeName}`);
-  console.log(`  - 1 Agent API Key: ${testRawKey}`);
+  console.log(`  - 1 Agent API Key: ${rawKey}`);
   console.log(`  - ${insertedProducts.length} Products`);
   console.log(`  - ${totalOrdersSeeded} Historical Orders (Revenue: ₹${totalRevenueSeeded.toLocaleString()}, Agent Revenue: ₹${agentRevenueSeeded.toLocaleString()})`);
   console.log(`  - 2 AI Bundle Offers (1 Approved, 1 Suggested)`);
